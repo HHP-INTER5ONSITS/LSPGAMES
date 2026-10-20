@@ -203,6 +203,107 @@ app.get('/api/me', auth, async (req, res) => {
 });
 app.post('/api/logout', auth, async (req, res) => { await db.deleteSession(req.token); res.json({ ok: true }); });
 
+/* ---------------- Sign in with LSP-Pay (OAuth 2.0 + PKCE) ----------------
+   1. /auth/lsppay           → send the player to LSP-Pay's consent screen, with a
+                               random `state` (also in a cookie) and a PKCE challenge.
+   2. /auth/lsppay/callback  → check the state matches the cookie (stops login CSRF),
+                               swap the code for a token server-side using the client
+                               secret, read the player's verified email, sign them in.
+   3. The browser gets a one-time handoff code, never the token in a URL.
+   The client secret is only ever used server to server. */
+const LSPID = { id: process.env.LSPPAY_CLIENT_ID || '', secret: process.env.LSPPAY_CLIENT_SECRET || '' };
+const lspLoginOn = () => Boolean(LSPID.id && LSPID.secret);
+const oauthStates = new Map(); // state -> { dob, verifier, exp }
+const handoffs = new Map();    // one-time code -> { login, exp }
+const STATE_COOKIE = 'lspg_oauth';
+const b64url = (buf) => Buffer.from(buf).toString('base64url');
+const cookieOf = (req, name) => {
+  const hit = String(req.headers.cookie || '').split(/;\s*/).find((c) => c.startsWith(name + '='));
+  return hit ? decodeURIComponent(hit.slice(name.length + 1)) : '';
+};
+const lspCallbackUrl = (req) => publicUrl(req) + '/auth/lsppay/callback';
+const sweep = (map) => { const now = Date.now(); for (const [k, v] of map) if (now > v.exp) map.delete(k); };
+
+app.get('/api/auth/providers', (req, res) => res.json({ lsppay: lspLoginOn() }));
+
+app.get('/auth/lsppay', (req, res) => {
+  const bounce = (msg) => res.redirect('/?login_error=' + encodeURIComponent(msg));
+  if (!lspLoginOn()) return bounce('Sign in with LSP-Pay is not set up yet. Use an email code.');
+  const dob = parseDob(req.query.dob);
+  if (!dob) return bounce('Enter your date of birth first.');
+  if (!allow(ipLog, 'oauth:' + req.ip, 30, 10 * 60 * 1000)) return bounce('Too many sign-in attempts. Try again in a few minutes.');
+
+  sweep(oauthStates);
+  const state = crypto.randomBytes(16).toString('hex');
+  const verifier = b64url(crypto.randomBytes(32));
+  oauthStates.set(state, { dob: dob.dob, verifier, exp: Date.now() + 10 * 60 * 1000 });
+  res.cookie(STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: 10 * 60 * 1000, path: '/auth/lsppay' });
+
+  const url = new URL(LSP.url + '/oauth/authorize');
+  url.searchParams.set('client_id', LSPID.id);
+  url.searchParams.set('redirect_uri', lspCallbackUrl(req));
+  url.searchParams.set('scope', 'profile email');
+  url.searchParams.set('state', state);
+  url.searchParams.set('code_challenge', b64url(crypto.createHash('sha256').update(verifier).digest()));
+  res.redirect(url.toString());
+});
+
+app.get('/auth/lsppay/callback', async (req, res) => {
+  const bounce = (msg) => res.redirect('/?login_error=' + encodeURIComponent(msg));
+  res.clearCookie(STATE_COOKIE, { path: '/auth/lsppay' });
+  if (req.query.error) return bounce('LSP-Pay sign-in was cancelled.');
+
+  const state = String(req.query.state || '');
+  const rec = oauthStates.get(state);
+  oauthStates.delete(state);
+  // The cookie proves this browser started the sign-in, so nobody can plant theirs on you.
+  if (!rec || Date.now() > rec.exp || !state || cookieOf(req, STATE_COOKIE) !== state)
+    return bounce('That sign-in expired or did not match. Please try again.');
+  const code = String(req.query.code || '');
+  if (!code) return bounce('LSP-Pay did not send a sign-in code. Please try again.');
+
+  try {
+    const tr = await fetch(LSP.url + '/oauth/token', {
+      method: 'POST',
+      signal: AbortSignal.timeout(30000),
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'authorization_code', code, redirect_uri: lspCallbackUrl(req),
+        client_id: LSPID.id, client_secret: LSPID.secret, code_verifier: rec.verifier,
+      }),
+    });
+    const tok = await tr.json().catch(() => ({}));
+    if (!tr.ok || !tok.access_token) throw new Error(`token exchange failed: ${tr.status} ${tok.error || ''} ${tok.error_description || ''}`);
+
+    const ur = await fetch(LSP.url + '/oauth/userinfo', { headers: { Authorization: 'Bearer ' + tok.access_token }, signal: AbortSignal.timeout(15000) });
+    const me = await ur.json().catch(() => ({}));
+    if (!ur.ok) throw new Error(`userinfo failed: ${ur.status} ${me.error || ''}`);
+    const email = normEmail(me.email);
+    if (!EMAIL_RE.test(email) || me.email_verified === false) return bounce('LSP-Pay did not share a verified email. Allow "Your email address" and try again.');
+
+    const user = await db.upsertUser(email, rec.dob);
+    const token = crypto.randomBytes(32).toString('hex');
+    await db.createSession(token, email, rec.dob, Date.now() + SESSION_TTL);
+
+    sweep(handoffs);
+    const handoff = crypto.randomBytes(24).toString('hex');
+    handoffs.set(handoff, { login: { token, email, dob: rec.dob, points: user.points, migrated: !!user.migrated }, exp: Date.now() + 60 * 1000 });
+    res.redirect('/?login=' + handoff);
+  } catch (e) {
+    console.error('[lsppay-login]', e.message);
+    bounce("Couldn't finish signing in with LSP-Pay. Try again, or use an email code.");
+  }
+});
+
+/** The app trades the one-time handoff for its session, so the token never sits in a URL. */
+app.post('/api/auth/lsppay/finish', (req, res) => {
+  const key = String(req.body.handoff || '');
+  const h = handoffs.get(key);
+  handoffs.delete(key);
+  if (!h || Date.now() > h.exp) return res.status(400).json({ error: 'That sign-in link expired. Please sign in again.' });
+  res.json(h.login);
+});
+
 /* ---------------- Wallet ----------------
    Points from playing are added by the game, so they are limited per call and per day to stop cheating.
    Bought points are ONLY added by the payment webhook below. */

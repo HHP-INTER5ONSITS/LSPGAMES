@@ -47,6 +47,11 @@ select:focus,input:focus{border-color:var(--brand);outline:none}
 .btn.ghost{background:#fff;color:var(--ink);border:2px solid var(--line);box-shadow:0 3px 0 var(--line)}
 .btn.gold{background:var(--gold);color:var(--ink);box-shadow:0 4px 0 #d48f00}
 .btn.block{width:100%;margin-top:14px}
+.or-line{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;font-weight:800;margin:16px 0 0}
+.or-line::before,.or-line::after{content:"";flex:1;height:2px;background:var(--line)}
+.btn.lsppay-btn{background:#1c1a2e;color:#fff;box-shadow:0 4px 0 #000;margin-top:12px}
+.btn.lsppay-btn:active{box-shadow:0 1px 0 #000}
+.lsppay-mark{display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:#fff;color:#1c1a2e;font-size:16px;font-weight:700}
 .btn[disabled]{opacity:.55;cursor:not-allowed;transform:none}
 .link{background:none;border:0;color:var(--brand);font-weight:800;padding:4px}
 .link[disabled]{color:var(--muted);cursor:default}
@@ -234,6 +239,10 @@ select:focus,input:focus{border-color:var(--brand);outline:none}
     </div>
     <p class="err" id="email-err" role="alert"></p>
     <button class="btn primary block" id="email-next" type="submit">Send code</button>
+    <div id="lsppay-wrap" hidden>
+      <p class="or-line"><span>or</span></p>
+      <button class="btn block lsppay-btn" id="lsppay-btn" type="button"><span class="lsppay-mark" aria-hidden="true">₹</span>Sign in with LSP-Pay</button>
+    </div>
   </form>
 </section>
 
@@ -440,6 +449,13 @@ $('#dob-next').onclick=()=>{
   err.textContent='';pending.dob=dob;show('s-email');$('#email').focus();
 };
 $('#email-form').addEventListener('submit',e=>{e.preventDefault();sendOtp(false)});
+// Sign in with LSP-Pay: the button only shows when the server has LSP-Pay keys.
+fetch('/api/auth/providers').then(r=>r.json()).then(p=>{if(p.lsppay)$('#lsppay-wrap').hidden=false}).catch(()=>{});
+$('#lsppay-btn').onclick=()=>{
+  if(!pending.dob){show('s-dob');return}
+  const b=$('#lsppay-btn');b.disabled=true;b.innerHTML='<span class="spin"></span>';
+  location.href='/auth/lsppay?dob='+encodeURIComponent(pending.dob);
+};
 async function sendOtp(isResend){
   const email=(isResend?pending.email:$('#email').value).trim().toLowerCase();
   const err=isResend?$('#otp-err'):$('#email-err');
@@ -830,7 +846,18 @@ $('#st-back').onclick=()=>enterHub();
 
 /* ================= boot ================= */
 (async()=>{
+  // Back from "Sign in with LSP-Pay": trade the one-time handoff for a session.
+  const Q=new URLSearchParams(location.search),handoff=Q.get('login'),loginErr=Q.get('login_error');
+  if(handoff||loginErr)history.replaceState(null,'',location.pathname);
+  if(handoff){
+    try{const d=await api('/api/auth/lsppay/finish',{handoff});
+      store.set('lsp_token',d.token);profile={email:d.email,dob:d.dob};store.set('lsp_profile',profile);
+      await afterLogin(d);enterHub();toast('Signed in with LSP-Pay. Welcome to LSPGames!');return}
+    catch(e){show('s-dob');$('#dob-err').textContent=e.message;return}
+  }
   const tok=store.get('lsp_token');
+  if(loginErr&&!tok){show('s-dob');$('#dob-err').textContent=loginErr;return}
+  if(loginErr)setTimeout(()=>toast(loginErr,4500),300);
   if(tok){try{const me=await api('/api/me');profile={email:me.email,dob:me.dob};store.set('lsp_profile',profile);await afterLogin(me);enterHub();const pay=new URLSearchParams(location.search).get('payment');if(pay){history.replaceState(null,'',location.pathname);openStore(pay)}return}catch(e){store.del('lsp_token')}}
   show('s-dob');
 })();
