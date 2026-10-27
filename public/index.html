@@ -186,6 +186,11 @@ select:focus,input:focus{border-color:var(--brand);outline:none}
 .st-pack .price{font-size:20px;font-weight:800}
 .st-pack .per{font-size:13px;color:var(--muted);font-weight:700}
 .st-ribbon{position:absolute;top:-12px;right:16px;background:var(--gold);color:var(--ink);font-weight:800;font-size:12px;padding:3px 10px;border-radius:99px}
+.st-lsppay{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#1c1a2e;color:#fff;border-radius:18px;padding:14px 16px;margin-top:18px}
+.st-lsppay>div{flex:1;min-width:180px}.st-lsppay b{font-family:Fredoka,system-ui,sans-serif;font-size:18px;font-weight:600}
+.st-lsppay p{margin:2px 0 0;font-size:14px;color:#c9c6dc}
+.st-switch{display:flex;align-items:center;gap:8px;font-weight:800;font-size:14px;margin:0;cursor:pointer}
+.st-switch input{width:20px;height:20px;accent-color:#14c79a}
 .st-custom input{width:100%;height:50px;border:2px solid var(--line);border-radius:12px;padding:0 14px;font:700 18px Nunito,system-ui,sans-serif;color:var(--ink)}
 .st-custom input:focus{border-color:var(--brand);outline:none}
 .st-note{display:flex;gap:10px;align-items:flex-start;background:#eef3ff;border-radius:14px;padding:12px 14px;margin-top:18px;font-size:14px;font-weight:700}
@@ -489,7 +494,7 @@ async function verify(){
   verifying=true;const btn=$('#otp-verify');setBusy(btn,true);
   try{
     const d=await api('/api/verify-otp',{email:pending.email,code});
-    store.set('lsp_token',d.token);profile={email:d.email,dob:d.dob};store.set('lsp_profile',profile);await afterLogin(d);
+    store.set('lsp_token',d.token);profile={email:d.email,dob:d.dob,lsppay:!!d.lsppay};store.set('lsp_profile',profile);await afterLogin(d);
     $('#otp-err').textContent='';enterHub();toast('Verified. Welcome to LSPGames!');
   }catch(e){$('#otp-err').textContent=e.message;const o=$('.otp');o.classList.remove('shake');void o.offsetWidth;o.classList.add('shake');clearOtp()}
   finally{verifying=false;setBusy(btn,false,'Verify and play')}
@@ -780,20 +785,28 @@ async function openStore(returnId){
   try{STORE=await api('/api/store')}catch(e){$('#st-body').innerHTML=`<p class="err">${e.message}</p>`;return}
   renderStore();loadHistory();if(returnId)watchPayment(returnId);
 }
+// Players who signed in with LSP-Pay can pay straight from their LSP-Pay wallet.
+const walletOn=()=>{try{return localStorage.getItem('lsp_paywallet')!=='0'}catch(_){return true}};
+const useWallet=()=>!!(STORE&&STORE.walletPay&&profile&&profile.lsppay&&walletOn());
 function renderStore(){
-  const S2=STORE,under18=profile.dob&&ageOf(profile.dob)<18;
+  const S2=STORE,under18=profile.dob&&ageOf(profile.dob)<18,canWallet=!!(S2.walletPay&&profile.lsppay),w=useWallet();
+  const buyLabel=(price)=>w?`Pay ${rs(price)}`:`Buy for ${rs(price)}`;
   if(!S2.enabled){$('#st-body').innerHTML='<div class="st-note">🛒 <span>Buying points is coming soon. Keep playing to earn points for free!</span></div>';return}
   $('#st-body').innerHTML=`
     ${S2.demo?`<div class="st-note warn">🧪 <span>Test mode: ${S2.gateway} is a demo gateway, so no real money is taken.${S2.newTab?' Test card 4111 1111 1111 1111 or any UPI ID like someone@okbank.':''}</span></div>`:''}
+    ${canWallet?`<div class="st-lsppay">
+      <span class="lsppay-mark" aria-hidden="true">₹</span>
+      <div><b>Pay with LSP-Pay</b><p>Checkout opens on your LSP-Pay wallet. Just enter your PIN.</p></div>
+      <label class="st-switch"><input type="checkbox" id="st-wallet" ${w?'checked':''}><span>Use my wallet</span></label></div>`:''}
     <div class="st-packs">${S2.packs.map(p=>`<div class="st-pack${p.tag?' best':''}">${p.tag?`<span class="st-ribbon">${p.tag}</span>`:''}
       <div class="pts">⭐ ${p.points.toLocaleString('en-IN')}</div><div class="price">${rs(p.price)}</div>
       <div class="per">${Math.round(p.points/p.price)} points per ₹1</div>
-      <button class="btn gold" data-pack="${p.id}">Buy for ${rs(p.price)}</button></div>`).join('')}
+      <button class="btn ${w?'lsppay-btn':'gold'}" data-pack="${p.id}">${buyLabel(p.price)}</button></div>`).join('')}
       <div class="st-pack st-custom"><div class="pts" style="font-size:24px">Pick your amount</div>
         <label for="st-amt" style="margin:0">How many points?</label>
         <input id="st-amt" type="number" inputmode="numeric" min="${S2.minRs*S2.rate}" step="1" placeholder="e.g. 5000">
         <div class="price" id="st-cost">${S2.rate} points per ₹1</div>
-        <button class="btn primary" id="st-buy-custom" disabled>Buy</button></div></div>
+        <button class="btn ${w?'lsppay-btn':'primary'}" id="st-buy-custom" disabled>${w?'Pay':'Buy'}</button></div></div>
     ${under18?`<label class="st-parent"><input type="checkbox" id="st-parent"> <span>A parent or guardian is with me and says it's OK to buy points.</span></label>`:''}
     <p class="err" id="st-err" role="alert"></p>
     <div class="st-note">🔒 <span>Payments are handled securely by ${S2.gateway}. LSPGames never sees your card or bank details. Points are added as soon as your payment is confirmed.</span></div>`;
@@ -802,14 +815,16 @@ function renderStore(){
     if(!n){cost.textContent=`${S2.rate} points per ₹1`;bc.disabled=true;return}
     if(r<S2.minRs){cost.textContent=`Minimum is ${(S2.minRs*S2.rate).toLocaleString('en-IN')} points (${rs(S2.minRs)})`;bc.disabled=true;return}
     if(r>S2.maxRs){cost.textContent=`Maximum is ${rs(S2.maxRs)} per purchase`;bc.disabled=true;return}
-    cost.textContent=`You pay ${rs(r)}`;bc.disabled=false;bc.textContent=`Buy ${n.toLocaleString('en-IN')} for ${rs(r)}`};
+    cost.textContent=`You pay ${rs(r)}`;bc.disabled=false;bc.textContent=w?`Pay ${rs(r)} for ${n.toLocaleString('en-IN')}`:`Buy ${n.toLocaleString('en-IN')} for ${rs(r)}`};
   bc.onclick=()=>startPay({points:Math.floor(Number(amt.value))},bc);
   $$('[data-pack]').forEach(b=>b.onclick=()=>startPay({pack:b.dataset.pack},b));
+  const ws=$('#st-wallet');if(ws)ws.onchange=()=>{try{localStorage.setItem('lsp_paywallet',ws.checked?'1':'0')}catch(_){};renderStore()};
 }
 async function startPay(body,btn){
   const err=$('#st-err');err.textContent='';
   const pc=$('#st-parent');if(pc&&!pc.checked){err.textContent='Please ask a parent or guardian, then tick the box.';pc.focus();return}
   body.parentOk=pc?pc.checked:false;
+  body.wallet=useWallet();
   const label=btn.textContent;btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
   // Open the tab right away (inside the click) so pop-up blockers allow it, then point it at checkout.
   const tab=STORE.newTab?window.open('about:blank','_blank'):null;
@@ -851,14 +866,14 @@ $('#st-back').onclick=()=>enterHub();
   if(handoff||loginErr)history.replaceState(null,'',location.pathname);
   if(handoff){
     try{const d=await api('/api/auth/lsppay/finish',{handoff});
-      store.set('lsp_token',d.token);profile={email:d.email,dob:d.dob};store.set('lsp_profile',profile);
+      store.set('lsp_token',d.token);profile={email:d.email,dob:d.dob,lsppay:!!d.lsppay};store.set('lsp_profile',profile);
       await afterLogin(d);enterHub();toast('Signed in with LSP-Pay. Welcome to LSPGames!');return}
     catch(e){show('s-dob');$('#dob-err').textContent=e.message;return}
   }
   const tok=store.get('lsp_token');
   if(loginErr&&!tok){show('s-dob');$('#dob-err').textContent=loginErr;return}
   if(loginErr)setTimeout(()=>toast(loginErr,4500),300);
-  if(tok){try{const me=await api('/api/me');profile={email:me.email,dob:me.dob};store.set('lsp_profile',profile);await afterLogin(me);enterHub();const pay=new URLSearchParams(location.search).get('payment');if(pay){history.replaceState(null,'',location.pathname);openStore(pay)}return}catch(e){store.del('lsp_token')}}
+  if(tok){try{const me=await api('/api/me');profile={email:me.email,dob:me.dob,lsppay:!!me.lsppay};store.set('lsp_profile',profile);await afterLogin(me);enterHub();const pay=new URLSearchParams(location.search).get('payment');if(pay){history.replaceState(null,'',location.pathname);openStore(pay)}return}catch(e){store.del('lsp_token')}}
   show('s-dob');
 })();
 </script>

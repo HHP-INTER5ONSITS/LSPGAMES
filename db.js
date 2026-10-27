@@ -57,6 +57,8 @@ async function mongoStore() {
       const u = await users.findOne({ email }); return { ok: false, points: u ? u.points : 0 };
     },
     async markMigrated(email) { const r = await users.updateOne({ email, migrated: { $ne: true } }, { $set: { migrated: true } }); return r.modifiedCount === 1; },
+    /* Remembers that this player signs in with LSP-Pay, so the store can offer one-tap wallet payment. */
+    async markLspPay(email) { await users.updateOne({ email }, { $set: { lsppay: true } }); },
     createOrder: (o) => orders.insertOne(o),
     getOrder: (orderId) => orders.findOne({ orderId }),
     getOrderByGateway: (gid) => orders.findOne({ gatewayOrderId: gid }),
@@ -101,6 +103,7 @@ function fileStore() {
     },
     async spendPoints(email, n) { const u = data.users[email]; if (!u || u.points < n) return { ok: false, points: u ? u.points : 0 }; u.points -= n; persist(); return { ok: true, points: u.points }; },
     async markMigrated(email) { const u = data.users[email]; if (!u || u.migrated) return false; u.migrated = true; persist(); return true; },
+    async markLspPay(email) { const u = data.users[email]; if (u) { u.lsppay = true; persist(); } },
     async createOrder(o) { data.orders[o.orderId] = { ...o, createdAt: new Date(o.createdAt).toISOString() }; persist(); },
     async getOrder(id) { return clone(data.orders[id]); },
     async getOrderByGateway(gid) { return clone(Object.values(data.orders).find((o) => o.gatewayOrderId === gid)); },

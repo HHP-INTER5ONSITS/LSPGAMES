@@ -199,7 +199,7 @@ async function auth(req, res, next) {
 
 app.get('/api/me', auth, async (req, res) => {
   const u = await db.getUser(req.session.email);
-  res.json({ email: req.session.email, dob: req.session.dob, points: u ? u.points : 0, migrated: !!(u && u.migrated) });
+  res.json({ email: req.session.email, dob: req.session.dob, points: u ? u.points : 0, migrated: !!(u && u.migrated), lsppay: !!(u && u.lsppay) });
 });
 app.post('/api/logout', auth, async (req, res) => { await db.deleteSession(req.token); res.json({ ok: true }); });
 
@@ -282,12 +282,13 @@ app.get('/auth/lsppay/callback', async (req, res) => {
     if (!EMAIL_RE.test(email) || me.email_verified === false) return bounce('LSP-Pay did not share a verified email. Allow "Your email address" and try again.');
 
     const user = await db.upsertUser(email, rec.dob);
+    await db.markLspPay(email);
     const token = crypto.randomBytes(32).toString('hex');
     await db.createSession(token, email, rec.dob, Date.now() + SESSION_TTL);
 
     sweep(handoffs);
     const handoff = crypto.randomBytes(24).toString('hex');
-    handoffs.set(handoff, { login: { token, email, dob: rec.dob, points: user.points, migrated: !!user.migrated }, exp: Date.now() + 60 * 1000 });
+    handoffs.set(handoff, { login: { token, email, dob: rec.dob, points: user.points, migrated: !!user.migrated, lsppay: true }, exp: Date.now() + 60 * 1000 });
     res.redirect('/?login=' + handoff);
   } catch (e) {
     console.error('[lsppay-login]', e.message);
@@ -350,7 +351,7 @@ const GATEWAY_NAME = process.env.GATEWAY_NAME || (GATEWAY_MODE === 'lsppay' ? 'L
 const sign = (buf) => crypto.createHmac('sha256', GATEWAY_SECRET).update(buf).digest('hex');
 const publicUrl = (req) => (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
 
-app.get('/api/store', (req, res) => res.json({ packs: PACKS, rate: RATE, minRs: MIN_RS, maxRs: MAX_RS, gateway: GATEWAY_NAME, demo: GATEWAY_MODE === 'demo' || GATEWAY_MODE === 'lsppay', newTab: GATEWAY_MODE === 'lsppay', enabled: ['demo', 'live', 'lsppay'].includes(GATEWAY_MODE), max: DBM.POINTS_MAX }));
+app.get('/api/store', (req, res) => res.json({ packs: PACKS, rate: RATE, minRs: MIN_RS, maxRs: MAX_RS, gateway: GATEWAY_NAME, demo: GATEWAY_MODE === 'demo' || GATEWAY_MODE === 'lsppay', newTab: GATEWAY_MODE === 'lsppay', walletPay: GATEWAY_MODE === 'lsppay', enabled: ['demo', 'live', 'lsppay'].includes(GATEWAY_MODE), max: DBM.POINTS_MAX }));
 
 app.post('/api/pay/create', auth, async (req, res) => {
   const email = req.session.email;
@@ -408,9 +409,12 @@ app.post('/api/pay/create', auth, async (req, res) => {
       if (!r) throw new Error('no answer: ' + lastErr);
       if (r.status === 429) { lspCooldownUntil = Date.now() + 30000; throw new Error('LSP-Pay said 429: still rate limited after 3 tries. LSP-Pay is limiting how many API requests LSPGames can make.'); }
       if (r.status === 401 || r.status === 403) throw new Error(`LSP-Pay said ${r.status}: LSP_PAY_KEY_ID or LSP_PAY_SECRET is wrong. ${JSON.stringify(data).slice(0, 200)}`);
-      if (!r.ok || !data.id || !/^https:\/\//.test(data.checkoutUrl || '') || Number(data.amount) !== rupees) throw new Error('LSP-Pay said ' + r.status + ' ' + JSON.stringify(data).slice(0, 300));
+      if (!r.ok || !data.id || !/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:/])/.test(data.checkoutUrl || '') || Number(data.amount) !== rupees) throw new Error('LSP-Pay said ' + r.status + ' ' + JSON.stringify(data).slice(0, 300));
       await db.setOrder(orderId, { gatewayOrderId: data.id });
-      return res.json({ orderId, paymentUrl: data.checkoutUrl, newTab: true });
+      // "Pay with LSP-Pay": open LSP-Pay checkout straight on the player's wallet.
+      let paymentUrl = data.checkoutUrl;
+      if (req.body.wallet === true) { const u = new URL(paymentUrl); u.searchParams.set('method', 'wallet'); paymentUrl = u.toString(); }
+      return res.json({ orderId, paymentUrl, newTab: true });
     } catch (e) {
       console.error('LSP-Pay create failed:', e.message);
       await db.setOrder(orderId, { status: 'failed', failReason: 'gateway_error' });
