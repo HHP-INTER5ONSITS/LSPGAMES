@@ -9,10 +9,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const SECRET = process.env.OTP_SECRET || crypto.randomBytes(32).toString('hex');
 const MAIL_FROM = process.env.MAIL_FROM || 'LSPGames <onboarding@resend.dev>';
-const DEV_SHOW_OTP = process.env.DEV_SHOW_OTP === 'true';
+// "true", "TRUE", "yes", "1" or "on" all count, ignoring stray spaces.
+const isOn = (v) => /^(true|yes|1|on)$/i.test(String(v || '').trim());
+const DEV_SHOW_OTP = isOn(process.env.DEV_SHOW_OTP);
 // Demo mode: the sign-in code is shown on the page, so sign-in works even when email
 // doesn't. Anyone can then sign in as ANY email address, so keep it off for real players.
-const DEMO_MODE = process.env.DEMO_MODE === 'true' || DEV_SHOW_OTP;
+const DEMO_MODE = isOn(process.env.DEMO_MODE) || DEV_SHOW_OTP;
 
 const OTP_TTL = 5 * 60 * 1000;          // code valid 5 minutes
 const RESEND_GAP = 30 * 1000;           // 30s between sends per email
@@ -534,6 +536,7 @@ DBM.connect().then((store) => {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`LSPGames running on port ${PORT}`);
     console.log(`Email provider: ${provider() || (DEMO_MODE ? 'none (demo mode: codes shown on screen)' : 'NONE CONFIGURED')}`);
+    if (!DEMO_MODE && process.env.DEMO_MODE) console.warn(`DEMO_MODE is "${process.env.DEMO_MODE}", which is not on. Use true to show sign-in codes on screen.`);
     if (DEMO_MODE) console.warn('DEMO MODE ON: sign-in codes are shown on the page, so anyone can sign in as any email. Set DEMO_MODE=false before real players use LSPGames.');
     console.log(`Storage: ${db.kind}. Payments: ${GATEWAY_MODE === 'lsppay' ? `LSP-Pay (${LSP.url}), key ${LSP.key || 'MISSING'}, webhook secret ${LSP.hook ? 'set' : 'MISSING (polling only)'}` : GATEWAY_MODE === 'demo' ? 'DEMO mode (no real money)' : GATEWAY_MODE === 'live' ? 'LIVE via ' + (process.env.GATEWAY_CREATE_URL || 'MISSING GATEWAY_CREATE_URL') : 'OFF'}`);
   });
