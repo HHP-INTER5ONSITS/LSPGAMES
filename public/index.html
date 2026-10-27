@@ -47,6 +47,11 @@ select:focus,input:focus{border-color:var(--brand);outline:none}
 .btn.ghost{background:#fff;color:var(--ink);border:2px solid var(--line);box-shadow:0 3px 0 var(--line)}
 .btn.gold{background:var(--gold);color:var(--ink);box-shadow:0 4px 0 #d48f00}
 .btn.block{width:100%;margin-top:14px}
+.demo-box{margin-top:16px;padding:14px;border-radius:14px;background:#fff7e6;border:2px dashed #ffb31a;text-align:center}
+.demo-box p{margin:6px 0 10px;font-weight:700}
+.demo-box b{font-family:Fredoka,system-ui,sans-serif;font-size:28px;letter-spacing:6px;color:var(--ink)}
+.demo-box .btn{height:42px;font-size:16px}
+.demo-tag{display:inline-block;font-size:12px;font-weight:800;color:#9a6a00;background:#ffe2a6;border-radius:99px;padding:2px 10px}
 .or-line{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;font-weight:800;margin:16px 0 0}
 .or-line::before,.or-line::after{content:"";flex:1;height:2px;background:var(--line)}
 .btn.lsppay-btn{background:#1c1a2e;color:#fff;box-shadow:0 4px 0 #000;margin-top:12px}
@@ -257,8 +262,8 @@ select:focus,input:focus{border-color:var(--brand);outline:none}
     <button type="button" class="back" data-go="s-email">‹ Change email</button>
     <div class="logo"><span class="mark">▶</span>LSPGames</div>
     <div class="steps" aria-label="Step 3 of 3"><span class="on"></span><span class="on"></span><span class="on"></span></div>
-    <h1>Check your email</h1>
-    <p class="muted">Enter the code we sent to <b id="otp-to"></b>. Look in spam if it's not there.</p>
+    <h1 id="otp-title">Check your email</h1>
+    <p class="muted" id="otp-sub">Enter the code we sent to <b id="otp-to"></b>. Look in spam if it's not there.</p>
     <div class="otp" role="group" aria-label="6-digit code">
       <input inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="Digit 1">
       <input inputmode="numeric" maxlength="1" aria-label="Digit 2">
@@ -266,6 +271,11 @@ select:focus,input:focus{border-color:var(--brand);outline:none}
       <input inputmode="numeric" maxlength="1" aria-label="Digit 4">
       <input inputmode="numeric" maxlength="1" aria-label="Digit 5">
       <input inputmode="numeric" maxlength="1" aria-label="Digit 6">
+    </div>
+    <div class="demo-box" id="demo-box" hidden>
+      <span class="demo-tag">Demo mode</span>
+      <p>Your code is <b id="demo-code"></b></p>
+      <button class="btn ghost" id="demo-fill" type="button">Fill it in</button>
     </div>
     <p class="err" id="otp-err" role="alert"></p>
     <button class="btn primary block" id="otp-verify">Verify and play</button>
@@ -470,10 +480,21 @@ async function sendOtp(isResend){
   try{
     const d=await api('/api/send-otp',{email,dob:pending.dob});
     if(!isResend){show('s-otp');$('#otp-to').textContent=email}
-    clearOtp();startCooldown(30);toast('Code sent to '+email);
-    if(d.devCode)toast('Dev mode code: '+d.devCode,9000);
+    clearOtp();startCooldown(30);
+    showDemoCode(d,email);
   }catch(e){err.textContent=e.message;if(isResend)setBusy(btn,false,'Resend code')}
   finally{if(!isResend)setBusy(btn,false,'Send code')}
+}
+// Demo mode: the server returns the code so sign-in works without email.
+function showDemoCode(d,email){
+  const box=$('#demo-box');
+  if(!d.demoCode){box.hidden=true;$('#otp-title').textContent='Check your email';
+    $('#otp-sub').innerHTML='Enter the code we sent to <b id="otp-to"></b>. Look in spam if it\'s not there.';$('#otp-to').textContent=email;
+    toast('Code sent to '+email);return}
+  $('#demo-code').textContent=d.demoCode;box.hidden=false;
+  $('#otp-title').textContent=d.emailed?'Check your email':'Enter your code';
+  $('#otp-sub').textContent=d.emailed?`We also emailed it to ${email}.`:`Demo mode: your code for ${email} is shown below instead of by email.`;
+  $('#demo-fill').onclick=()=>fillOtp(d.demoCode);
 }
 const boxes=$$('.otp input');
 boxes.forEach((b,i)=>{

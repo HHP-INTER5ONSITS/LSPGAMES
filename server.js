@@ -10,6 +10,9 @@ const PORT = process.env.PORT || 3000;
 const SECRET = process.env.OTP_SECRET || crypto.randomBytes(32).toString('hex');
 const MAIL_FROM = process.env.MAIL_FROM || 'LSPGames <onboarding@resend.dev>';
 const DEV_SHOW_OTP = process.env.DEV_SHOW_OTP === 'true';
+// Demo mode: the sign-in code is shown on the page, so sign-in works even when email
+// doesn't. Anyone can then sign in as ANY email address, so keep it off for real players.
+const DEMO_MODE = process.env.DEMO_MODE === 'true' || DEV_SHOW_OTP;
 
 const OTP_TTL = 5 * 60 * 1000;          // code valid 5 minutes
 const RESEND_GAP = 30 * 1000;           // 30s between sends per email
@@ -152,16 +155,21 @@ app.post('/api/send-otp', async (req, res) => {
   const code = String(crypto.randomInt(100000, 1000000));
   otps.set(email, { hash: hashCode(email, code), exp: Date.now() + OTP_TTL, attempts: 0, sentAt: Date.now(), dob: dob.dob });
 
+  let emailed = true;
   try {
-    await sendOtpEmail(email, code);
+    if (DEMO_MODE && !provider()) emailed = false; // nothing to send with; the page shows the code
+    else await sendOtpEmail(email, code);
   } catch (err) {
     console.error('Email send failed:', err.message);
-    otps.delete(email);
-    return res.status(500).json({ error: "Couldn't send the email. Check the server's email settings and try again." });
+    emailed = false;
+    if (!DEMO_MODE) {
+      otps.delete(email);
+      return res.status(500).json({ error: "Couldn't send the email. Check the server's email settings and try again." });
+    }
   }
 
   const out = { ok: true, expiresIn: OTP_TTL / 1000 };
-  if (DEV_SHOW_OTP) out.devCode = code;
+  if (DEMO_MODE) { out.demoCode = code; out.emailed = emailed; }
   res.json(out);
 });
 
@@ -525,7 +533,8 @@ DBM.connect().then((store) => {
   db = store;
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`LSPGames running on port ${PORT}`);
-    console.log(`Email provider: ${provider() || (DEV_SHOW_OTP ? 'none (DEV mode, codes in log)' : 'NONE CONFIGURED')}`);
+    console.log(`Email provider: ${provider() || (DEMO_MODE ? 'none (demo mode: codes shown on screen)' : 'NONE CONFIGURED')}`);
+    if (DEMO_MODE) console.warn('DEMO MODE ON: sign-in codes are shown on the page, so anyone can sign in as any email. Set DEMO_MODE=false before real players use LSPGames.');
     console.log(`Storage: ${db.kind}. Payments: ${GATEWAY_MODE === 'lsppay' ? `LSP-Pay (${LSP.url}), key ${LSP.key || 'MISSING'}, webhook secret ${LSP.hook ? 'set' : 'MISSING (polling only)'}` : GATEWAY_MODE === 'demo' ? 'DEMO mode (no real money)' : GATEWAY_MODE === 'live' ? 'LIVE via ' + (process.env.GATEWAY_CREATE_URL || 'MISSING GATEWAY_CREATE_URL') : 'OFF'}`);
   });
 }).catch((e) => { console.error('Database connection failed:', e.message); process.exit(1); });
