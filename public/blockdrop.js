@@ -37,10 +37,10 @@
   function hit(m, x, y) { for (let r = 0; r < m.length; r++) for (let c = 0; c < m[r].length; c++) if (m[r][c]) { const bx = x + c, by = y + r; if (bx < 0 || bx >= CW || by >= CH || (by >= 0 && G.board[by][bx])) return true; } return false; }
   const rot = (m) => m[0].map((_, i) => m.map((r) => r[i]).reverse());
   function move(dx) { if (!hit(G.cur.m, G.cur.x + dx, G.cur.y)) { G.cur.x += dx; G.lock = 0; } }
-  function rotate() { const m = rot(G.cur.m); for (const k of [0, -1, 1, -2, 2]) if (!hit(m, G.cur.x + k, G.cur.y)) { G.cur.m = m; G.cur.x += k; G.lock = 0; return; } }
+  function rotate() { LSPG.sfx('click', { volume: 0.6 }); const m = rot(G.cur.m); for (const k of [0, -1, 1, -2, 2]) if (!hit(m, G.cur.x + k, G.cur.y)) { G.cur.m = m; G.cur.x += k; G.lock = 0; return; } }
   function soft() { if (!hit(G.cur.m, G.cur.x, G.cur.y + 1)) { G.cur.y++; G.score += 1; return true; } return false; }
-  function hard() { let n = 0; while (!hit(G.cur.m, G.cur.x, G.cur.y + 1)) { G.cur.y++; n++; } G.score += n * 2; place(); }
-  function place() {
+  function hard() { LSPG.sfx('drop'); let n = 0; while (!hit(G.cur.m, G.cur.x, G.cur.y + 1)) { G.cur.y++; n++; } G.score += n * 2; place(); }
+  function place() { LSPG.sfx('place', { volume: 0.6 });
     const c = G.cur; let over = false;
     c.m.forEach((row, r) => row.forEach((v, cc) => { if (v) { if (c.y + r < 0) over = true; else G.board[c.y + r][c.x + cc] = P[c.k].c; } }));
     if (over) return gameOver();
@@ -48,7 +48,7 @@
     if (full.length) {
       G.flash = full.map((y) => ({ y, t: 0.25 }));
       full.forEach((y) => { G.board.splice(y, 1); G.board.unshift(Array(CW).fill(null)); });
-      G.score += [0, 100, 300, 500, 800][full.length] * G.level; G.lines += full.length; G.level = 1 + Math.floor(G.lines / 10);
+      G.score += [0, 100, 300, 500, 800][full.length] * G.level; G.lines += full.length; if (full.length) LSPG.sfx('line'); G.level = 1 + Math.floor(G.lines / 10);
     }
     G.fall = 0; G.lock = 0; spawn(); hud();
   }

@@ -122,14 +122,14 @@
 
   function burst(x, y, color, n, sp) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = sp * (0.3 + Math.random() * 0.7); R.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.7, color, size: 3 + Math.random() * 4 }); } }
 
-  function hurt() {
+  function hurt() { LSPG.sfx('crash');
     if (R.inv > 0 || R.over) return;
     if (R.shields > 0) { R.shields--; R.inv = 1.4; burst(R.dist, R.y, '#4fb6f0', 22, 260); return; }
     R.over = true; R.deadT = 1.2; R.finalM = Math.floor(R.dist / 20); burst(R.dist, R.y, R.color, 36, 340); burst(R.dist, R.y, '#ffb31a', 24, 260);
     setTimeout(endRun, 900);
   }
 
-  function endRun() {
+  function endRun() { LSPG.sfx('explode', { volume: 0.7 });
     const m = R.finalM, starPts = Math.floor(R.stars * (1 + 0.2 * SS.upg.value)), distPts = Math.floor(m / 10);
     const got = Wallet.add(distPts + starPts);
     const newBest = m > SS.best; if (newBest) SS.best = m; SS.runs++; ssave(); refreshPoints();
@@ -183,7 +183,7 @@
       if (it.type === 'star' && pull > 0 && d < pull) { it.x += (R.dist - it.x) * Math.min(1, dt * 8); it.y += (R.y - it.y) * Math.min(1, dt * 8); }
       if (d < PR + 14) {
         it.taken = true;
-        if (it.type === 'star') { R.stars++; R.parts.push({ x: it.x, y: it.y, vx: 0, vy: -40, life: 0.4, color: '#ffe28a', size: 8 }); }
+        if (it.type === 'star') { R.stars++; LSPG.sfx('coin', { volume: 0.5 }); R.parts.push({ x: it.x, y: it.y, vx: 0, vy: -40, life: 0.4, color: '#ffe28a', size: 8 }); }
         else if (it.type === 'shield') { R.shields++; burst(it.x, it.y, '#4fb6f0', 16, 200); }
         else { R.magnetT = 9; burst(it.x, it.y, '#ff4d8b', 16, 200); }
       }

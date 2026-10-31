@@ -143,7 +143,7 @@
           { resume: api.togglePause, quit: () => { if (api.onQuit) api.onQuit(); api.openLobby(); } });
       };
       api.end = (title, got, text, buttons) => {
-        api.over = true; refreshPoints();
+        api.over = true; refreshPoints(); if (LSPG.sfx) LSPG.sfx(got > 0 ? 'win' : 'lose', { volume: 0.7 });
         const acts = {}, html = (buttons || [['again', 'Play again', 'primary'], ['lobby', 'Back', 'ghost']]).map(([id, label, cls, fn]) => { acts[id] = fn || (id === 'lobby' ? () => api.openLobby() : () => api.onAgain && api.onAgain()); return `<button class="btn ${cls || 'ghost'}" data-a="${id}">${label}</button>`; }).join('');
         api.modal(`<h2>${title}</h2>${got != null ? `<p class="big">⭐ +${got.toLocaleString()}</p>` : ''}<p class="muted">${text || ''}</p><div class="modal-actions">${html}</div>`, acts);
       };

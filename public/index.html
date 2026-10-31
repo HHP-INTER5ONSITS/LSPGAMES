@@ -301,24 +301,24 @@ select:focus,input:focus{border-color:var(--brand);outline:none}
   <main class="wrap">
     <h1 class="hello" id="hello">Hi</h1>
     <p class="muted">Pick a game and jump in.</p>
+    <button class="featured kart" id="play-drive">
+      <div class="art"><canvas id="hub-art-drive"></canvas></div>
+      <div class="info">
+        <span class="tag">New · 3D</span>
+        <h2>LSP Drive</h2>
+        <p class="muted">A whole 3D city. Get in your car or bike, sit in the driver's seat, run delivery jobs, race, hit the off-road jumps, and lose the Red Vipers gang. Upgrade your engine, turbo, tires, armor and nitro.</p>
+        <p style="font-weight:800" id="hub-drive-progress"></p>
+        <span class="btn primary">Drive</span>
+      </div>
+    </button>
     <button class="featured" id="play-intercode">
       <div class="art"><canvas id="hub-art"></canvas></div>
       <div class="info">
-        <span class="tag">Now playing</span>
+        <span class="tag">Shooter</span>
         <h2>RPG INTERCODE</h2>
         <p class="muted">Fight your way through 15 levels of shooter bots. Each win earns points to buy new guns and upgrades.</p>
         <p style="font-weight:800" id="hub-progress"></p>
         <span class="btn primary">Play</span>
-      </div>
-    </button>
-    <button class="featured kart" id="play-kart">
-      <div class="art"><canvas id="hub-art-kart"></canvas></div>
-      <div class="info">
-        <span class="tag">New</span>
-        <h2>Kart Blitz</h2>
-        <p class="muted">Race 5 bots over 6 tracks. Finish in the top 3 to unlock the next track, and spend points on faster cars and upgrades.</p>
-        <p style="font-weight:800" id="hub-kart-progress"></p>
-        <span class="btn primary">Race</span>
       </div>
     </button>
     <h2 class="section-title">Roleplay</h2>
@@ -371,43 +371,6 @@ select:focus,input:focus{border-color:var(--brand);outline:none}
   <div class="help">WASD to move, mouse to aim, click to shoot, Esc to pause</div>
   <div class="rotate hudpill">Turn your phone sideways for a bigger arena</div>
   <div class="modal" id="modal"><div class="modal-card" id="modal-card"></div></div>
-</section>
-
-<!-- Kart Blitz lobby -->
-<section class="screen" id="s-klobby">
-  <header class="topbar"><div class="topbar-in">
-    <button class="iconbtn" data-go="s-hub" aria-label="Back to games">‹</button>
-    <h2 style="font-size:20px">Kart Blitz</h2>
-    <div class="spacer"></div>
-    <span class="pill" title="Points">⭐ <span class="js-points">0</span></span>
-  </div></header>
-  <main class="wrap">
-    <div class="tabs" role="tablist">
-      <button class="tab ktab on" data-ktab="races" role="tab">Races</button>
-      <button class="tab ktab" data-ktab="garage" role="tab">Garage</button>
-      <button class="tab ktab" data-ktab="upgrades" role="tab">Upgrades</button>
-    </div>
-    <div class="kpanel on" id="kp-races"><div class="levels" id="k-races"></div><p class="note">Finish in the top 3 to unlock the next track. Better places earn more points.</p></div>
-    <div class="kpanel" id="kp-garage"><div class="items" id="k-cars"></div></div>
-    <div class="kpanel" id="kp-upgrades"><div class="items" id="k-upgrades"></div></div>
-  </main>
-</section>
-
-<!-- Kart Blitz race -->
-<section class="screen" id="s-race">
-  <canvas id="kcv"></canvas>
-  <div class="hud">
-    <button class="iconbtn" id="kpause" aria-label="Pause">⏸</button>
-    <span class="hudpill" id="k-pos">🏁 6th / 6</span>
-    <span class="hudpill" id="k-lap">Lap 1 / 3</span>
-    <span class="hudpill" id="k-time">0:00.0</span>
-  </div>
-  <div class="kgauge"><div class="kspeed"><b id="k-speed">0</b> km/h</div><div class="knitro">Nitro<div class="bar"><i id="k-nitro" style="width:0%"></i></div></div></div>
-  <div class="kpad kpad-l"><button class="kbtn" data-k="left" aria-label="Steer left">◀</button><button class="kbtn" data-k="right" aria-label="Steer right">▶</button></div>
-  <div class="kpad kpad-r"><button class="kbtn nitro" data-k="nitro" aria-label="Nitro">🔥</button><button class="kbtn brake" data-k="brake">BRAKE</button><button class="kbtn gas" data-k="gas">GAS</button></div>
-  <div class="help">Arrows or WASD to drive, Shift for nitro, Esc to pause</div>
-  <div class="rotate hudpill">Turn your phone sideways for a better view</div>
-  <div class="modal" id="kmodal"><div class="modal-card" id="kmodal-card"></div></div>
 </section>
 
 <section class="screen" id="s-store" style="overflow:auto">
@@ -555,7 +518,7 @@ function enterHub(){
   $('#hello').textContent=`Hi, ${name}`;$('#avatar-btn').textContent=name[0].toUpperCase();
   $('#menu-email').textContent=profile.email;$('#menu-age').textContent=profile.dob?`Age ${ageOf(profile.dob)}`:'';
   $('#hub-progress').textContent=S.cleared>=MAXL?'All 15 levels cleared!':`Level ${S.unlocked} of ${MAXL} unlocked`;
-  refreshPoints();show('s-hub');requestAnimationFrame(drawHubArt);if(window.Kart)Kart.onHub();if(window.LSPG)LSPG.runHub();
+  refreshPoints();show('s-hub');requestAnimationFrame(drawHubArt);if(window.LSPG)LSPG.runHub();
 }
 $('#avatar-btn').onclick=e=>{e.stopPropagation();$('#menu').classList.toggle('open')};
 document.addEventListener('click',e=>{if(!e.target.closest('#menu'))$('#menu').classList.remove('open')});
@@ -690,8 +653,8 @@ function update(dt){
   for(const bl of M.bullets){
     bl.x+=bl.vx*dt;bl.y+=bl.vy*dt;bl.life-=dt;
     if(bl.x<0||bl.x>W||bl.y<0||bl.y>H||blocked(bl.x,bl.y)){bl.dead=true;burst(bl.x,bl.y,'#b9c3d8',4,120,.25);continue}
-    if(bl.team===0){for(const b of M.bots){if(b.dead||(bl.hit&&bl.hit.has(b)))continue;if(Math.hypot(b.x-bl.x,b.y-bl.y)<b.r+bl.r){b.hp-=bl.dmg;b.hitT=.08;burst(bl.x,bl.y,b.color,5,160,.3);if(bl.hit)bl.hit.add(b);if(b.hp<=0)killBot(b);if(!bl.pierce){bl.dead=true;break}}}}
-    else if(Math.hypot(p.x-bl.x,p.y-bl.y)<p.r+bl.r){bl.dead=true;p.hp-=bl.dmg;p.hitT=.12;M.shake=7;burst(bl.x,bl.y,'#2f6bff',6,160,.3);if(p.hp<=0){p.hp=0;endMatch(false)}}
+    if(bl.team===0){for(const b of M.bots){if(b.dead||(bl.hit&&bl.hit.has(b)))continue;if(Math.hypot(b.x-bl.x,b.y-bl.y)<b.r+bl.r){b.hp-=bl.dmg;b.hitT=.08;if(LSPG.sfx)LSPG.sfx('hit',{volume:.35});burst(bl.x,bl.y,b.color,5,160,.3);if(bl.hit)bl.hit.add(b);if(b.hp<=0)killBot(b);if(!bl.pierce){bl.dead=true;break}}}}
+    else if(Math.hypot(p.x-bl.x,p.y-bl.y)<p.r+bl.r){bl.dead=true;p.hp-=bl.dmg;p.hitT=.12;M.shake=Math.max(M.shake,6);if(LSPG.sfx)LSPG.sfx('hurt',{volume:.6});M.shake=7;burst(bl.x,bl.y,'#2f6bff',6,160,.3);if(p.hp<=0){p.hp=0;endMatch(false)}}
   }
   M.bullets=M.bullets.filter(b=>!b.dead&&b.life>0);
   M.bots=M.bots.filter(b=>!b.dead);
@@ -704,19 +667,21 @@ function playerFire(){
   for(let i=0;i<w.pellets;i++){const off=w.pellets>1?(i/(w.pellets-1)-.5)*w.spread*2+(Math.random()-.5)*.05:(Math.random()-.5)*w.spread*2;const a=p.ang+off;
     M.bullets.push({x:p.x+Math.cos(a)*28,y:p.y+Math.sin(a)*28,vx:Math.cos(a)*w.speed,vy:Math.sin(a)*w.speed,dmg,team:0,life:1.4,r:w.pierce?6:4,color:w.color,pierce:w.pierce,hit:w.pierce?new Set():null})}
   burst(p.x+Math.cos(p.ang)*30,p.y+Math.sin(p.ang)*30,'#ffb31a',3,90,.12);if(w.pierce)M.shake=4;
+  if(LSPG.sfx)LSPG.sfx(w.pierce?'laser':w.pellets>1?'shotgun':w.rate<.15?'rifle':'shoot',{volume:w.rate<.15?.35:.55});M.shake=Math.max(M.shake,w.pellets>1?5:1.5);
 }
 function botFire(b){
   const c=M.c,shots=[];
   if(b.boss){b.volley++;if(b.volley%3===0){for(let i=0;i<16;i++)shots.push(i/16*Math.PI*2)}else for(let i=-2;i<=2;i++)shots.push(b.ang+i*.13)}
   else shots.push(b.ang+(Math.random()-.5)*c.spread*2);
+  if(LSPG.sfx)LSPG.sfx(b.boss?'shotgun':'shoot',{volume:b.boss?.35:.18});
   for(const a of shots){const s=b.boss?c.bspeed*.85:c.bspeed;M.bullets.push({x:b.x+Math.cos(a)*(b.r+8),y:b.y+Math.sin(a)*(b.r+8),vx:Math.cos(a)*s,vy:Math.sin(a)*s,dmg:c.dmg*(b.boss?1.25:1),team:1,life:2.2,r:5,color:'#ff4d5e'})}
 }
-function killBot(b){b.dead=true;const pts=b.boss?60*M.n:10+M.n*5;M.earned+=pts;M.kills++;burst(b.x,b.y,b.color,b.boss?40:18,300,.6);floatText(b.x,b.y-b.r-10,'+'+pts);M.shake=b.boss?12:5}
+function killBot(b){b.dead=true;const pts=b.boss?60*M.n:10+M.n*5;M.earned+=pts;M.kills++;burst(b.x,b.y,b.color,b.boss?40:18,300,.6);floatText(b.x,b.y-b.r-10,'+'+pts);M.shake=b.boss?12:5;if(LSPG.sfx)LSPG.sfx('explode',{volume:b.boss?1:.5})}
 function burst(x,y,color,n,sp,life){for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=sp*(.3+Math.random()*.7);M.parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:life*(.6+Math.random()*.4),max:life,color,size:2+Math.random()*3})}}
 function floatText(x,y,text){M.parts.push({x,y,vx:0,vy:-55,life:1.1,max:1.1,text,color:'#e89a00'})}
 
 function endMatch(win){
-  if(M.over)return;M.over=true;const n=M.n;let bonus=0;
+  if(M.over)return;M.over=true;const n=M.n;let bonus=0;if(LSPG.sfx)LSPG.sfx(win?'win':'lose');
   if(win){bonus=40*n+(M.player.hp/M.player.max>.7?25*n:0);S.unlocked=Math.max(S.unlocked,Math.min(MAXL,n+1));S.cleared=Math.max(S.cleared,n)}
   const total=Wallet.add(M.earned+bonus);S.kills+=M.kills;save();refreshPoints();
   setTimeout(()=>{
@@ -898,8 +863,9 @@ $('#st-back').onclick=()=>enterHub();
   show('s-dob');
 })();
 </script>
-<script src="kart.js"></script>
 <script src="common.js"></script>
+<script src="sfx.js"></script>
+<script src="drive.js"></script>
 <script src="tycoon.js"></script>
 <script src="obby.js"></script>
 <script src="skydash.js"></script>

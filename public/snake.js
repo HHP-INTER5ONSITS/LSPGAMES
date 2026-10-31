@@ -110,7 +110,7 @@
       s.boost = s.score > 60 && Math.random() < 0.05;
     }
   }
-  function kill(s) {
+  function kill(s) { LSPG.sfx('explode', { volume: 0.5 });
     if (s.dead) return; s.dead = true;
     for (let i = 0; i < s.segs.length; i += 2) { const p = s.segs[i]; addOrb(p.x + (Math.random() - 0.5) * 14, p.y + (Math.random() - 0.5) * 14, 2 + ((Math.random() * 3) | 0)); }
     for (let i = 0; i < 16; i++) G.parts.push({ x: s.segs[0].x, y: s.segs[0].y, vx: (Math.random() - 0.5) * 300, vy: (Math.random() - 0.5) * 300, life: 0.6, c: s.colors[0] });

@@ -48,7 +48,7 @@
     const pat = Math.max(14, 26 - G.day * 1.5) * (1 + 0.15 * S.upg.decor);
     G.cust[slot] = { order, got: order.map(() => false), pat, max: pat, x: SLOTS[slot], y: 200, shirt: `hsl(${(Math.random() * 360) | 0},60%,62%)`, skin: SKIN[(Math.random() * 5) | 0], enter: 0, leave: 0, happy: null };
   }
-  function tapStation(st) {
+  function tapStation(st) { LSPG.sfx('place', { volume: 0.6 });
     if (st.locked) return;
     const f = st.f, c = G.cooking[f.id];
     if (f.cook) {
@@ -58,7 +58,7 @@
       G.tray.push(f.id); delete G.cooking[f.id];
     } else { if (G.tray.length >= 4) { toast('Your tray is full'); return; } G.tray.push(f.id); }
   }
-  function serve(i) {
+  function serve(i) { LSPG.sfx('cash');
     const c = G.cust[i]; if (!c || c.leave) return;
     let any = false;
     c.order.forEach((id, k) => { if (c.got[k]) return; const ti = G.tray.indexOf(id); if (ti >= 0) { G.tray.splice(ti, 1); c.got[k] = true; any = true; } });

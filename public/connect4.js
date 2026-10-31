@@ -53,11 +53,11 @@
     for (const c of valid) { const r = rowFor(G.b, c); G.b[r][c] = 2; const v = minimax(G.b, G.lv.depth - 1, -Infinity, Infinity, false); G.b[r][c] = 0; if (v > bv) { bv = v; best = c; } }
     drop(best, 2);
   }
-  function drop(c, p) {
+  function drop(c, p) { LSPG.sfx('click');
     if (G.drop || G.win) return; const r = rowFor(G.b, c); if (r < 0) return;
     G.drop = { c, r, p, y: BY - SZ, vy: 0 };
   }
-  function land() {
+  function land() { LSPG.sfx('drop');
     const d = G.drop; G.b[d.r][d.c] = d.p; G.drop = null; G.moves++;
     const w = lineAt(G.b);
     if (w) { G.win = w; return finish(w.p); }

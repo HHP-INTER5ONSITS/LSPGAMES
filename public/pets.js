@@ -38,7 +38,7 @@
     for (const n of NEEDS) p.needs[n.id] = Math.max(0, p.needs[n.id] - hrs * 12);
     p.seen = Date.now();
   }
-  function hatch(egg) {
+  function hatch(egg) { LSPG.sfx('pop');
     if (egg.id === 'starter') { if (S.starter) return; S.starter = true; }
     else if (!Wallet.spend(egg.cost)) return;
     let r = Math.random(), rar = 0; for (let i = 0; i < 3; i++) { if (r < egg.odds[i]) { rar = i; break; } r -= egg.odds[i]; }
@@ -59,12 +59,12 @@
   function updHud() { $('#pt-name').textContent = `${P.name} (${AGES[P.age]})`; }
   $$('#s-pets [data-act]').forEach((b) => (b.onclick = () => startCare(b.dataset.act)));
 
-  function startCare(id) {
+  function startCare(id) { LSPG.sfx('click');
     if (!R || A.paused || R.action) return;
     const s = SPOTS[id]; R.target = id; R.tx = s.x; R.ty = s.y;
     if (id === 'fun') R.ball = { x: 520, y: 300, vx: 380 * (Math.random() < 0.5 ? -1 : 1), vy: -200 };
   }
-  function finishCare(id) {
+  function finishCare(id) { LSPG.sfx('coin');
     const before = P.needs[id], xp = Math.round(8 + (100 - before) / 6), mult = RAR[TYPES[P.type].rar].mult;
     P.needs[id] = 100; P.xp += xp;
     let got = Wallet.add(2 * mult);

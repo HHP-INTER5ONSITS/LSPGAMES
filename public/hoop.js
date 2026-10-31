@@ -67,7 +67,7 @@
     if (G.msg) { G.msg.t -= dt; if (G.msg.t <= 0) G.msg = null; }
     hud();
   }
-  function score(b) {
+  function score(b) { LSPG.sfx('swish'); LSPG.sfx('ding', { volume: 0.5 });
     b.scored = true; G.streak++; G.made++;
     let pts = b.touched ? 2 : 3; if (G.streak >= 3) pts *= 2; if (G.hoop.vx) pts += 1;
     G.score += pts; G.time = Math.min(60, G.time + (b.touched ? 0 : 1.5));

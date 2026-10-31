@@ -90,7 +90,7 @@
   A.onAgain = start;
 
   /* ---------- jobs ---------- */
-  function startJob(type) { W.job = { type, stage: '', target: null, npc: null, fire: 0, t: 0 }; nextTask(); updateHud(); toast(`You're now a ${JOBS[type].name}!`); }
+  function startJob(type) { LSPG.sfx('pop'); W.job = { type, stage: '', target: null, npc: null, fire: 0, t: 0 }; nextTask(); updateHud(); toast(`You're now a ${JOBS[type].name}!`); }
   function quitJob() { if (!W.job) return; if (W.job.npc) W.npcs = W.npcs.filter((n) => n !== W.job.npc); W.job = null; W.fireHouse = null; updateHud(); }
   function nextTask() {
     const j = W.job; j.t = 0;
@@ -101,7 +101,7 @@
     else if (j.type === 'fire') { const h = houses[(Math.random() * houses.length) | 0]; W.fireHouse = h; j.target = h; j.stage = 'fire'; j.fire = 0; }
     updateHud();
   }
-  function pay(msg) {
+  function pay(msg) { LSPG.sfx('cash');
     const j = W.job, base = JOBS[j.type].pay, bonus = j.type === 'pizza' && j.t < 25 ? 5 : 0;
     const got = Wallet.add(base + bonus); W.earned += got; S.done[j.type]++; save();
     W.floats.push({ x: W.p.x, y: W.p.y - 50, t: 1.4, txt: `+${got} ⭐` });
@@ -140,7 +140,7 @@
   }
   function burst(x, y, c, n) { for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, s = 60 + Math.random() * 180; W.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.6, c }); } }
 
-  function useDoor(b) {
+  function useDoor(b) { LSPG.sfx('door');
     if (b.job) {
       const jb = JOBS[b.job];
       if (W.job && W.job.type === b.job) { toast(`You're already working as a ${jb.name}.`); return; }

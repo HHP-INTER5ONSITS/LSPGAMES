@@ -108,7 +108,7 @@
     const rb = $('#ty-rb-btn'); if (rb) rb.disabled = !(allBuilt() && TS.cash >= REBIRTH_COST);
   }
 
-  function buy(id) {
+  function buy(id) { LSPG.sfx('cash');
     const it = ITEMS.find((i) => i.id === id);
     if (!it || has(id) || TS.cash < it.cost) return;
     TS.cash -= it.cost; TS.bought.push(id); tsave(); renderShop();
@@ -118,7 +118,7 @@
     toast(it.name + ' built');
   }
 
-  function rebirth() {
+  function rebirth() { LSPG.sfx('win');
     if (!(allBuilt() && TS.cash >= REBIRTH_COST)) return;
     const got = Wallet.add(rebirthReward());
     TS.rebirths++; TS.cash = 0; TS.bought = ['d1']; blocks = []; timers = {};
@@ -130,7 +130,7 @@
     if (blocks.length > 450) return;
     blocks.push({ x: SLOTS[it.slot] + (Math.random() - .5) * 6, y: it.big ? 200 : 182, vy: 0, val: it.val, color: it.color, size: it.big ? 20 : 16, onBelt: false, ups: 0, shine: false, glow: false });
   }
-  function tap() {
+  function tap() { LSPG.sfx('pop', { volume: 0.5 });
     if (tapCd > 0) return; tapCd = .12;
     const best = ITEMS.filter((i) => i.type === 'drop' && has(i.id)).sort((a, b) => b.val - a.val)[0];
     if (best) spawn(best);

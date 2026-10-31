@@ -172,7 +172,7 @@
   function burst(x, y, color, n, sp) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = sp * (0.3 + Math.random() * 0.7); G.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 80, life: 0.6, color, size: 3 + Math.random() * 3 }); } }
   function floatText(x, y, text, color) { G.parts.push({ x, y, vx: 0, vy: -60, life: 1.1, text, color }); }
 
-  function die() {
+  function die() { LSPG.sfx('hurt');
     if (G.deadT > 0 || G.over) return;
     const p = G.p; G.deaths++; G.deadT = 0.55;
     burst(p.x + PW / 2, p.y + PH / 2, G.color, 26, 320);
@@ -212,7 +212,7 @@
     p.vx += (target - p.vx) * Math.min(1, dt * (p.onGround ? 16 : 9));
     if (inp.dir) p.face = inp.dir;
     p.coyote = p.onGround ? 0.1 : p.coyote - dt;
-    if (p.jumpBuf > 0 && p.coyote > 0) { p.vy = -G.jumpV; p.coyote = 0; p.jumpBuf = 0; p.onGround = false; p.mover = null; p.squash = -0.25; }
+    if (p.jumpBuf > 0 && p.coyote > 0) { p.vy = -G.jumpV; LSPG.sfx('jump', { volume: 0.6 }); p.coyote = 0; p.jumpBuf = 0; p.onGround = false; p.mover = null; p.squash = -0.25; }
     p.vy += GRAV * dt;
     if (!inp.jump && p.vy < 0) p.vy += GRAV * 1.4 * dt;
     p.vy = Math.min(p.vy, 1100);
@@ -240,7 +240,7 @@
       // stand on the tile under the player's centre when possible
       const cx = Math.floor((p.x + PW / 2) / T), ct = solid(cx, groundTile.ty) ? { tx: cx, ty: groundTile.ty } : groundTile;
       const c = tileAt(ct.tx, ct.ty);
-      if (c === 'J') { p.vy = -PAD_V; p.onGround = false; p.squash = -0.35; burst(ct.tx * T + T / 2, ct.ty * T, '#ffb31a', 10, 160); }
+      if (c === 'J') { LSPG.sfx('bounce'); p.vy = -PAD_V; p.onGround = false; p.squash = -0.35; burst(ct.tx * T + T / 2, ct.ty * T, '#ffb31a', 10, 160); }
       else if (c === 'D') { const k = ct.ty * s.cols + ct.tx; if (!G.dis[k]) G.dis[k] = { t: 0.45, gone: 0 }; }
       for (let tx = tx0; tx <= tx1; tx++) if (tileAt(tx, groundTile.ty) === 'D') { const k = groundTile.ty * s.cols + tx; if (!G.dis[k]) G.dis[k] = { t: 0.45, gone: 0 }; }
     }
@@ -263,7 +263,7 @@
     if (s.finish && pcx > s.finish.x - 10 && pcx < s.finish.x + T + 10 && pcy > s.finish.y - T * 2) win();
   }
 
-  function win() {
+  function win() { LSPG.sfx('win');
     G.over = true; const n = G.n, base = rewardOf(n), flawless = G.deaths === 0;
     const total = base + G.coins * 5 + (flawless ? Math.round(base * 0.5) : 0);
     const got = Wallet.add(total);

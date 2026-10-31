@@ -41,7 +41,7 @@
   A.onAgain = () => start(D.mi);
   const posAt = (d) => { for (const s of D.segs) if (d <= s.s + s.l) { const t = (d - s.s) / s.l; return { x: s.a.x + (s.b.x - s.a.x) * t, y: s.a.y + (s.b.y - s.a.y) * t }; } return D.pts[D.pts.length - 1]; };
   function hud() { $('#td-wave').textContent = `Wave ${D.wave}/${WAVES}`; $('#td-lives').textContent = `❤️ ${D.lives}`; $('#td-gold').textContent = `💰 ${D.gold}`; const b = $('#td-next'); b.disabled = D.active || D.wave >= WAVES; b.textContent = D.active ? 'Wave running' : 'Start wave'; }
-  function nextWave() {
+  function nextWave() { LSPG.sfx('beep');
     if (D.active || D.wave >= WAVES || A.over) return;
     D.wave++; D.active = true; const w = D.wave, q = [];
     const n = 6 + w * 2; for (let i = 0; i < n; i++) q.push(w >= 3 && i % 4 === 3 ? 'runner' : w >= 5 && i % 6 === 5 ? 'tank' : 'slime');
@@ -103,7 +103,7 @@
       hud(); if (D.wave >= WAVES) finish(true);
     }
   }
-  function kill(e) { if (e.dead) return; e.dead = true; D.gold += e.gold; hud(); for (let i = 0; i < 8; i++) D.parts.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 160, vy: (Math.random() - 0.5) * 160, life: 0.4, c: e.color }); }
+  function kill(e) { LSPG.sfx('pop', { volume: 0.35 }); if (e.dead) return; e.dead = true; D.gold += e.gold; hud(); for (let i = 0; i < 8; i++) D.parts.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 160, vy: (Math.random() - 0.5) * 160, life: 0.4, c: e.color }); }
   function finish(win) {
     A.over = true;
     let got = 0; if (win) { got = Wallet.add(150 * (D.mi + 1) + D.lives * 5); D.earned += got; S.best[D.mi] = Math.max(S.best[D.mi] || 0, D.lives); S.unlocked = Math.max(S.unlocked, Math.min(MAPS.length, D.mi + 2)); save(); }

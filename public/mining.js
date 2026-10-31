@@ -55,7 +55,7 @@
   const cap = () => BAG[S.upg.bag], power = () => PICK[S.upg.pick];
   const worth = () => M.bag.reduce((a, i) => a + ORES[i].val, 0);
   function hud() { $('#mn-bag').textContent = `🎒 ${M.bag.length}/${cap()}`; $('#mn-depth').textContent = `⬇️ ${Math.max(0, M.y - SURF + 1)} m`; $('#mn-worth').textContent = `⭐ ${worth()}`; }
-  function sell() {
+  function sell() { LSPG.sfx('cash');
     if (!M.bag.length) return;
     const v = worth(), got = Wallet.add(v); S.earned += got; M.sold += got;
     M.bag.forEach((i) => { if (!S.found.includes(ORES[i].id)) S.found.push(ORES[i].id); });
@@ -64,7 +64,7 @@
   }
   $('#mn-home').onclick = () => { if (!M || A.over) return; M.x = M.px = 4; M.y = M.py = SURF - 1; M.dig = null; hud(); };
 
-  function tryMove(dx, dy) {
+  function tryMove(dx, dy) { LSPG.sfx('hit', { volume: 0.25 });
     const nx = M.x + dx, ny = M.y + dy;
     if (dx) M.face = dx;
     if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) return;

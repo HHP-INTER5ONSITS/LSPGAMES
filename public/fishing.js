@@ -49,14 +49,14 @@
     const pool = FISH.filter((f) => f.r === rar), f = pool[(Math.random() * pool.length) | 0];
     return { ...f, kg: +(f.kg[0] + Math.random() * (f.kg[1] - f.kg[0])).toFixed(f.kg[1] > 50 ? 0 : 1) };
   }
-  function press() {
+  function press() { LSPG.sfx('reel', { volume: 0.6 });
     if (!F || A.paused || A.over) return;
     holding = true;
     if (F.state === 'idle') { F.state = 'charge'; F.power = 0; F.pdir = 1; }
     else if (F.state === 'bite') { F.state = 'reel'; F.fish = pickFish(); F.meter = 0.3; F.zone = 260; F.zv = 0; F.fy = 300; F.ftarget = 300; say('Hold to lift the green zone!', 2); }
     else if (F.state === 'wait') { F.state = 'idle'; F.bob = null; say('Too early! Wait for the dip.', 1.5); }
   }
-  function release() {
+  function release() { LSPG.sfx('swish');
     holding = false;
     if (F && F.state === 'charge') {
       F.state = 'cast'; const dist = 300 + F.power * 640;
@@ -94,7 +94,7 @@
       if (F.meter >= 1) catchFish(); else if (F.meter <= 0) { F.state = 'idle'; F.bob = null; say(`The ${RAR[F.fish.r].name.toLowerCase()} fish escaped!`, 2); }
     }
   }
-  function catchFish() {
+  function catchFish() { LSPG.sfx('splash'); setTimeout(() => LSPG.sfx('coin'), 250);
     const f = F.fish, got = Wallet.add(f.val);
     F.caught++; F.earned += got; S.caught++; S.earned += got;
     const bk = S.book[f.id]; const isNew = !bk; S.book[f.id] = { n: (bk ? bk.n : 0) + 1, best: Math.max(bk ? bk.best : 0, f.kg) }; save(); hud();
