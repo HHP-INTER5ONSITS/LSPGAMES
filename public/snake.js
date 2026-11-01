@@ -23,6 +23,63 @@
   const g = A.g;
   let G = null, aim = null, touchDir = null;
 
+  /* ---------- 3D arena ---------- */
+  const K = 1 / 20; // 20 px = 1 m
+  const V = L.g3d(A, { sky: ['#5a9be0', '#bfe0f7'], fogNear: 30, fogFar: 110, shadowSize: 30 });
+  const D3 = {};
+  V.onReady((V) => {
+    const T = V.T, sc = V.scene;
+    const grass = V.tex(128, 128, (c) => { c.fillStyle = '#7cc46a'; c.fillRect(0, 0, 128, 128); for (let i = 0; i < 500; i++) { c.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,.06)' : 'rgba(0,60,0,.08)'; c.fillRect(Math.random() * 128, Math.random() * 128, 2, 3); } c.fillStyle = 'rgba(255,255,255,.08)'; c.fillRect(0, 0, 64, 64); c.fillRect(64, 64, 64, 64); }, [R * K / 3, R * K / 3]);
+    const fl = new T.Mesh(new T.CircleGeometry(R * K, 96), new T.MeshStandardMaterial({ map: grass, roughness: 0.95 })); fl.rotation.x = -Math.PI / 2; fl.receiveShadow = true; sc.add(fl);
+    const out = new T.Mesh(new T.RingGeometry(R * K, R * K + 80, 96), V.M('#4f8a45')); out.rotation.x = -Math.PI / 2; out.position.y = -0.02; sc.add(out);
+    const wall = new T.Mesh(new T.TorusGeometry(R * K, 0.5, 10, 128), V.M('#ff4d5e', { emissive: '#ff4d5e', emissiveIntensity: 0.3 })); wall.rotation.x = Math.PI / 2; wall.position.y = 0.3; sc.add(wall);
+    for (let i = 0; i < 70; i++) { const a = Math.random() * 6.28, r = R * K + 4 + Math.random() * 30; V.tree(Math.cos(a) * r, Math.sin(a) * r, 0.8 + Math.random() * 0.8); }
+    D3.body = new T.InstancedMesh(new T.SphereGeometry(1, 14, 10), new T.MeshStandardMaterial({ roughness: 0.35 }), 7000); D3.body.castShadow = true; D3.body.frustumCulled = false; sc.add(D3.body);
+    D3.orbs = new T.InstancedMesh(new T.IcosahedronGeometry(1, 1), new T.MeshStandardMaterial({ roughness: 0.25, metalness: 0.1 }), 900); D3.orbs.frustumCulled = false; sc.add(D3.orbs);
+    D3.eyes = new T.InstancedMesh(new T.SphereGeometry(1, 10, 8), V.M('#ffffff', { roughness: 0.2 }), 80); D3.eyes.frustumCulled = false; sc.add(D3.eyes);
+    D3.pupils = new T.InstancedMesh(new T.SphereGeometry(1, 8, 6), V.M('#16203d'), 80); D3.pupils.frustumCulled = false; sc.add(D3.pupils);
+    D3.m = new T.Matrix4(); D3.c = new T.Color(); D3.v = new T.Vector3(); D3.cam = new T.Vector3(0, 20, 14);
+    V.follow = new T.Vector3();
+    V.camera.fov = 55; V.camera.updateProjectionMatrix();
+  });
+  function draw3() {
+    const T = V.T, m = D3.m, c = D3.c, me = G.me, h = me.segs[0];
+    const tgt = D3.v.set(h.x * K, 0, h.y * K), zoomOut = Math.min(14, me.score / 60);
+    if (!me.dead) { D3.cam.x += (tgt.x - D3.cam.x) * 0.15; D3.cam.z += (tgt.z + 13 + zoomOut * 0.7 - D3.cam.z) * 0.15; }
+    V.camera.position.set(D3.cam.x, 19 + zoomOut, D3.cam.z); V.camera.lookAt(D3.cam.x, 0, D3.cam.z - 13 - zoomOut * 0.7);
+    V.follow.set(D3.cam.x, 0, D3.cam.z - 12);
+    const cx = D3.cam.x / K, cy = (D3.cam.z - 13) / K, vis = (x, y) => Math.abs(x - cx) < 1100 && Math.abs(y - cy) < 900;
+    let n = 0, e = 0;
+    for (const s of G.snakes) {
+      if (s.dead) continue; const w = (7 + Math.min(10, s.score / 60)) * K * 1.25, cols = s.colors;
+      for (let i = s.segs.length - 1; i >= 0 && n < 7000; i--) {
+        const p = s.segs[i]; if (!vis(p.x, p.y)) continue;
+        const sz = i === 0 ? w * 1.15 : w * (1 - (i / s.segs.length) * 0.35);
+        m.makeScale(sz, sz * 0.85, sz); m.setPosition(p.x * K, sz * 0.8, p.y * K); D3.body.setMatrixAt(n, m); D3.body.setColorAt(n, c.set(cols[Math.floor(i / 3) % cols.length])); n++;
+      }
+      const hd = s.segs[0]; if (!vis(hd.x, hd.y)) continue;
+      for (const side of [-1, 1]) { const a = s.dir + side * 0.55, ex = hd.x * K + Math.cos(a) * w * 0.75, ez = hd.y * K + Math.sin(a) * w * 0.75, ey = w * 1.55;
+        m.makeScale(w * 0.38, w * 0.38, w * 0.38); m.setPosition(ex, ey, ez); D3.eyes.setMatrixAt(e, m);
+        m.makeScale(w * 0.2, w * 0.2, w * 0.2); m.setPosition(ex + Math.cos(s.dir) * w * 0.25, ey + w * 0.05, ez + Math.sin(s.dir) * w * 0.25); D3.pupils.setMatrixAt(e, m); e++; }
+    }
+    D3.body.count = n; D3.body.instanceMatrix.needsUpdate = true; if (D3.body.instanceColor) D3.body.instanceColor.needsUpdate = true;
+    D3.eyes.count = D3.pupils.count = e; D3.eyes.instanceMatrix.needsUpdate = D3.pupils.instanceMatrix.needsUpdate = true;
+    let o = 0;
+    for (const ob of G.orbs) { if (!vis(ob.x, ob.y) || o >= 900) continue; const r = (3 + ob.v * 1.5) * K * 1.4; m.makeScale(r, r, r); m.setPosition(ob.x * K, r + 0.15 + Math.sin(G.t * 3 + ob.ph) * 0.12, ob.y * K); D3.orbs.setMatrixAt(o, m); D3.orbs.setColorAt(o, c.set(ob.c)); o++; }
+    D3.orbs.count = o; D3.orbs.instanceMatrix.needsUpdate = true; if (D3.orbs.instanceColor) D3.orbs.instanceColor.needsUpdate = true;
+    for (const q of G.parts) if (!q.shown) { q.shown = true; V.puff(q.x * K, 1, q.y * K, q.c, 0.6, 0.6, q.vx * K, 3, q.vy * K, 0, 1, 8); }
+    V.frame();
+    for (const s of G.snakes) { if (s.dead) continue; const hd = s.segs[0]; if (!vis(hd.x, hd.y)) continue; V.label(hd.x * K, 2.4 + Math.min(10, s.score / 60) * K * 2, hd.y * K, s.name, { size: 13, weight: 800, family: 'Nunito, system-ui, sans-serif', color: s === me ? '#1f4fd1' : '#16203d', stroke: 'rgba(255,255,255,.8)' }); }
+    board();
+  }
+  function board() {
+    const v = A.view; g.setTransform(v.d, 0, 0, v.d, 0, 0);
+    const top = [...G.snakes].filter((s) => !s.dead).sort((a, b) => b.score - a.score).slice(0, 5), W = v.w / v.d, me = G.me;
+    g.fillStyle = 'rgba(255,255,255,.9)'; L.rr(g, W - 190, 64, 176, 30 + top.length * 22, 12); g.fill();
+    g.fillStyle = '#16203d'; g.font = '800 14px Nunito, system-ui, sans-serif'; g.textAlign = 'left'; g.fillText('Leaderboard', W - 176, 86);
+    top.forEach((s, i) => { g.fillStyle = s === me ? '#1f4fd1' : '#66708f'; g.fillText(`${i + 1}. ${s.name}`, W - 176, 108 + i * 22); g.textAlign = 'right'; g.fillText(lenOf(s), W - 26, 108 + i * 22); g.textAlign = 'left'; });
+  }
+
   function makeSnake(name, colors, bot) {
     const a = Math.random() * 6.28, r = Math.random() * R * 0.75, x = Math.cos(a) * r, y = Math.sin(a) * r, dir = Math.random() * 6.28;
     const segs = Array.from({ length: 12 }, (_, i) => ({ x: x - Math.cos(dir) * i * SEG, y: y - Math.sin(dir) * i * SEG }));
@@ -37,7 +94,7 @@
     for (let i = 0; i < 11; i++) { let b; do { b = makeSnake(BOT_NAMES[i], [`hsl(${(i * 33) % 360},70%,58%)`, `hsl(${(i * 33 + 40) % 360},70%,72%)`], true); } while (Math.hypot(b.segs[0].x, b.segs[0].y) < 450); b.score = 12 + Math.floor(Math.random() * 60); G.snakes.push(b); }
     G.me.shield = 2.5;
     for (let i = 0; i < 700; i++) addOrb();
-    aim = null; A.play(); A.run(step);
+    aim = null; A.play(); V.init(); A.run(step);
   }
   A.onAgain = start;
   function addOrb(x, y, v) {
@@ -60,6 +117,7 @@
     G.t += dt;
     const me = G.me, v = A.view, r = A.cv.getBoundingClientRect();
     if (touchDir) { const cx = r.left + r.width / 2, cy = r.top + r.height / 2; if (Math.hypot(touchDir.x - cx, touchDir.y - cy) > 10) me.target = Math.atan2(touchDir.y - cy, touchDir.x - cx); }
+    else if (aim && V.ready) { const p = V.pick(aim, { y: 0 }); if (p) me.target = Math.atan2(p.z / K - me.segs[0].y, p.x / K - me.segs[0].x); }
     else if (aim) { const hx = (me.segs[0].x - G.cam.x) * G.z + v.w / 2, hy = (me.segs[0].y - G.cam.y) * G.z + v.h / 2; me.target = Math.atan2((aim.clientY - r.top) * v.d - hy, (aim.clientX - r.left) * v.d - hx); }
     const k = A.keys; if (k.ArrowLeft || k.KeyA) me.target = me.dir - 1; if (k.ArrowRight || k.KeyD) me.target = me.dir + 1;
     me.boost = !!(A.tin.mouse || A.tin.boost || k.Space) && me.score > 20;
@@ -121,6 +179,7 @@
     }
   }
   function draw() {
+    if (V.ready) return draw3();
     const v = A.view, me = G.me, h = me.segs[0];
     G.z = Math.min(v.w, v.h) / (700 + Math.min(500, me.score));
     const z = G.z; if (!me.dead) { G.cam.x += (h.x - G.cam.x) * 0.2; G.cam.y += (h.y - G.cam.y) * 0.2; }
