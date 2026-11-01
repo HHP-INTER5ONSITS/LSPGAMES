@@ -67,6 +67,85 @@
   </section>`);
 
   const cv = $('#ty-cv'), g = cv.getContext('2d');
+
+  /* ---------- 3D factory ---------- */
+  const K = 0.016, FX = (x) => (x - 500) * K, FY = (y) => (BELT_Y - y) * K + 1.0;
+  const V = L.g3d({ key: 'tycoon', scr: $('#ty-stage'), cv, g, view: { d: 1 } }, { sky: ['#6fb2ee', '#d4ecfb'], fogNear: 30, fogFar: 80, shadowSize: 10 });
+  Object.defineProperty(V.A, 'view', { get: () => ({ d: cv.width / Math.max(1, cv.clientWidth) }) });
+  const D3 = { mach: {} };
+  V.onReady((V) => {
+    const T = V.T, sc = V.scene;
+    D3.floor = V.ground(60, 40, '#cfc8b8'); D3.grass = V.ground(200, 200, '#7cc46a', -0.02);
+    // conveyor belt with moving stripes
+    D3.beltTex = V.tex(64, 16, (c) => { c.fillStyle = '#2b3350'; c.fillRect(0, 0, 64, 16); c.fillStyle = 'rgba(255,255,255,.18)'; c.fillRect(0, 0, 18, 16); }, [((BELT_X1 - BELT_X0) * K) / 0.5, 1]);
+    const bl = (BELT_X1 - BELT_X0) * K, bx = FX((BELT_X0 + BELT_X1) / 2);
+    V.box(bl + 0.3, 0.35, 1.4, '#3c435a', bx, 0.82, 0);
+    const top = new T.Mesh(new T.PlaneGeometry(bl, 1.2), new T.MeshStandardMaterial({ map: D3.beltTex, roughness: 0.7 })); top.rotation.x = -Math.PI / 2; top.position.set(bx, 1.0, 0); top.receiveShadow = true; sc.add(top);
+    for (let x = BELT_X0 + 40; x < BELT_X1; x += 120) V.box(0.14, 0.7, 1.2, '#5b6178', FX(x), 0.35, 0);
+    V.box(10.5, 0.12, 0.12, '#3c435a', FX(360), FY(60), 0); // overhead rail
+    // furnace
+    D3.furn = new T.Group(); D3.furn.position.set(FX(940), 0, 0); sc.add(D3.furn);
+    D3.furnBody = V.box(1.7, 3, 1.9, '#5b6178', 0, 1.5, 0, D3.furn); V.box(1.3, 0.6, 1.5, '#454b61', 0, 3.3, 0, D3.furn); V.cyl(0.25, 0.25, 1.4, '#3c435a', 0.3, 4.2, -0.3, D3.furn, 10);
+    D3.mouth = V.box(1.2, 0.9, 0.1, V.M('#ff8a1a', { emissive: '#ff6a00', emissiveIntensity: 1.5 }), -0.86, 1.25, 0, D3.furn, false); D3.mouth.rotation.y = Math.PI / 2;
+    D3.fire = new T.PointLight('#ff8a3d', 10, 6); D3.fire.position.set(FX(900), 1.6, 0.5); sc.add(D3.fire);
+    // factory building (bought later)
+    D3.walls = new T.Group(); sc.add(D3.walls);
+    const brick = V.tex(64, 32, (c) => { c.fillStyle = '#c96f4a'; c.fillRect(0, 0, 64, 32); c.fillStyle = '#e8d8c6'; for (let y = 0; y < 32; y += 8) { c.fillRect(0, y, 64, 1); for (let x = (y / 8) % 2 ? 0 : 16; x < 64; x += 32) c.fillRect(x, y, 1, 8); } }, [10, 4]);
+    const wall = new T.Mesh(new T.PlaneGeometry(22, 9), new T.MeshStandardMaterial({ map: brick })); wall.position.set(0, 4.5, -4); D3.walls.add(wall);
+    for (const x of [-11, 11]) { const w = wall.clone(); w.position.set(x, 4.5, 2); w.rotation.y = x < 0 ? Math.PI / 2 : -Math.PI / 2; w.scale.x = 0.55; D3.walls.add(w); }
+    for (const x of [-5, 0, 5]) { V.box(2, 1.5, 0.1, '#cfe8ff', x, 5.2, -3.95, D3.walls, false); }
+    for (let x = -10; x <= 10; x += 4) V.box(0.3, 0.3, 12, '#8b6b4a', x, 8.7, 2, D3.walls);
+    D3.outdoor = new T.Group(); sc.add(D3.outdoor); for (let i = 0; i < 12; i++) D3.outdoor.add(V.tree(-14 + i * 2.6, -8 - Math.random() * 6, 0.9 + Math.random() * 0.5));
+    D3.blocks = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), new T.MeshStandardMaterial({ roughness: 0.4, metalness: 0.1 }), 460); D3.blocks.castShadow = true; D3.blocks.frustumCulled = false; sc.add(D3.blocks);
+    D3.m = new T.Matrix4(); D3.c = new T.Color(); D3.q = new T.Quaternion(); D3.sv = new T.Vector3(); D3.pv = new T.Vector3();
+    V.camera.fov = 45; V.camera.position.set(0.2, 4.8, 12.5); V.camera.lookAt(0.2, 2.3, 0); V.camera.updateProjectionMatrix(); V.follow = new T.Vector3(0, 0, 0);
+  });
+  function machine(it, ghost) {
+    const T = V.T, gr = new T.Group(), mat = (c) => (ghost ? V.M(c, { transparent: true, opacity: 0.35 }) : V.M(c, { roughness: 0.5, metalness: 0.2 }));
+    if (it.type === 'drop') {
+      const big = it.big ? 1.25 : 1; gr.position.set(FX(SLOTS[it.slot]), 0, 0);
+      V.cyl(0.04, 0.04, 0.6, mat('#5b6178'), 0, FY(60) - 0.3, 0, gr, 6);
+      V.box(0.8 * big, 0.95 * big, 0.8 * big, mat('#ffffff'), 0, FY(96) - 0.5 * big, 0, gr);
+      V.box(0.82 * big, 0.22, 0.82 * big, mat(it.color), 0, FY(96) - 0.15, 0, gr);
+      const fun = new T.Mesh(new T.CylinderGeometry(0.28, 0.12, 0.3, 12), mat('#3c435a')); fun.position.y = FY(96) - 1.0 * big - 0.12; gr.add(fun);
+    } else {
+      gr.position.set(FX(it.x), 0, 0);
+      for (const z of [-0.65, 0.65]) V.box(0.14, 1.6, 0.14, mat('#3c435a'), 0, 1.8, z, gr);
+      V.box(0.5, 0.25, 1.5, mat(it.color), 0, 2.65, 0, gr);
+      if (!ghost) { const f = V.box(0.06, 1.4, 1.2, V.M(it.color, { transparent: true, opacity: 0.25, emissive: it.color, emissiveIntensity: 0.8 }), 0, 1.75, 0, gr, false); gr.userData.field = f; }
+    }
+    V.scene.add(gr); return gr;
+  }
+  function draw3() {
+    const T = V.T, next = new Set(visibleNext().map((i) => i.id)), walls = has('walls');
+    for (const it of ITEMS) {
+      if (it.type !== 'drop' && it.type !== 'up') continue;
+      const state = has(it.id) ? 'own' : next.has(it.id) ? 'ghost' : '';
+      const cur = D3.mach[it.id];
+      if (!cur || cur.userData.state !== state) { if (cur) V.scene.remove(cur); if (state) { const m = machine(it, state === 'ghost'); m.userData.state = state; D3.mach[it.id] = m; } else delete D3.mach[it.id]; }
+      const m = D3.mach[it.id]; if (m && m.userData.field) m.userData.field.material.opacity = 0.18 + Math.sin(time * 5 + it.x) * 0.08;
+    }
+    D3.walls.visible = walls; D3.outdoor.visible = !walls; D3.grass.visible = !walls;
+    const gold = has('furnace'); D3.furnBody.material = V.M(gold ? '#f2c230' : '#5b6178', { metalness: gold ? 0.7 : 0.2, roughness: 0.35 });
+    D3.mouth.material.emissiveIntensity = 1.2 + furnaceFlash * 2; D3.fire.intensity = 8 + furnaceFlash * 18;
+    D3.beltTex.offset.x = -(time * beltSpeed() * K) / 0.5;
+    const m = D3.m, c = D3.c; let n = 0;
+    for (const b of blocks) { if (n >= 460) break; const s2 = b.size * K * 1.15; m.compose(D3.pv.set(FX(b.x), FY(b.y), 0), D3.q, D3.sv.set(s2, s2, s2)); D3.blocks.setMatrixAt(n, m); c.set(b.color); if (b.glow) c.offsetHSL(0, 0, 0.12); D3.blocks.setColorAt(n++, c); }
+    D3.blocks.count = n; D3.blocks.instanceMatrix.needsUpdate = true; if (D3.blocks.instanceColor) D3.blocks.instanceColor.needsUpdate = true;
+    if (furnaceFlash > 0.9 && Math.random() < 0.5) V.puff(FX(940), 4.9, -0.3, '#9a9aa0', 0.6, 1.4, 0, 1.4, 0, 0.8, 0.5);
+    V.frame();
+    for (const it of ITEMS) {
+      if (!next.has(it.id) || has(it.id)) continue;
+      if (it.type === 'drop') V.label(FX(SLOTS[it.slot]), FY(96) - 0.5, 0.5, money(it.cost), { size: 13, color: '#16203d', bg: '#ffb31a' });
+      else if (it.type === 'up') V.label(FX(it.x), 3.1, 0.5, money(it.cost), { size: 13, color: '#16203d', bg: '#ffb31a' });
+    }
+    for (const it of ITEMS) if (it.type === 'drop' && has(it.id)) V.label(FX(SLOTS[it.slot]), FY(96) - 0.55 * (it.big ? 1.25 : 1), 0.5, money(it.val), { size: 12, color: '#16203d' });
+    for (const it of ITEMS) if (it.type === 'up' && has(it.id)) V.label(FX(it.x), 2.65, 0.8, '×' + it.mult, { size: 13, color: '#ffffff' });
+    V.label(FX(940), 0.5, 1.2, gold ? 'GOLD ×2' : 'FURNACE', { size: 13, color: '#ffffff', bg: 'rgba(22,32,61,.7)' });
+    if (!gold && next.has('furnace')) V.label(FX(940), 5.2, 0, money(250000), { size: 13, color: '#16203d', bg: '#ffb31a' });
+    if (!walls && next.has('walls')) V.label(0, 6.5, -3, '🏠 ' + money(600000), { size: 14, color: '#16203d', bg: '#ffb31a' });
+    for (const f of floats) V.label(FX(f.x), FY(f.y), 0.5, f.txt, { size: 20, color: '#0b8f6e', stroke: '#fff', alpha: Math.min(1, f.t * 1.5) });
+  }
   let TS = null, blocks = [], floats = [], sparks = [], timers = {}, raf = 0, last = 0, time = 0, saveT = 0, uiT = 0, tapCd = 0, payAcc = 0, payT = 0, furnaceFlash = 0;
 
   function tload() {
@@ -194,6 +273,7 @@
   }
 
   function draw() {
+    if (V.ready) return draw3();
     const s = cv.width / W; g.setTransform(s, 0, 0, s, 0, 0);
     const walls = has('walls');
     if (walls) {
@@ -265,7 +345,7 @@
     let offline = 0;
     if (away > 30) { offline = Math.floor(rate() * away * .25); TS.cash += offline; TS.total += offline; }
     blocks = []; floats = []; sparks = []; timers = {};
-    show('s-tycoon'); refreshPoints(); renderShop(); tsave();
+    show('s-tycoon'); refreshPoints(); renderShop(); tsave(); V.init();
     requestAnimationFrame(() => { L.fit(cv); if (!raf) { last = performance.now(); raf = requestAnimationFrame(loop); } });
     if (offline > 0) toast(`While you were away, your factory made ${money(offline)}`, 4200);
   }
