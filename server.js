@@ -140,61 +140,73 @@ async function sendOtpEmail(to, code) {
 // ---------- API ----------
 app.get('/healthz', (req, res) => res.json({ ok: true }));
 
-app.post('/api/send-otp', async (req, res) => {
-  const email = normEmail(req.body.email);
-  const dob = parseDob(req.body.dob);
-  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
-  if (!dob) return res.status(400).json({ error: 'Enter a valid date of birth (age 5 or older).' });
-  if (!allow(ipLog, req.ip, 20, 3600 * 1000)) return res.status(429).json({ error: 'Too many requests. Try again in an hour.' });
-
-  const existing = otps.get(email);
-  if (existing && Date.now() - existing.sentAt < RESEND_GAP) {
-    const wait = Math.ceil((RESEND_GAP - (Date.now() - existing.sentAt)) / 1000);
-    return res.status(429).json({ error: `Wait ${wait}s before asking for a new code.` });
-  }
-  if (!allow(emailLog, email, 5, 3600 * 1000)) return res.status(429).json({ error: 'Too many codes for this email. Try again in an hour.' });
-
-  const code = String(crypto.randomInt(100000, 1000000));
-  otps.set(email, { hash: hashCode(email, code), exp: Date.now() + OTP_TTL, attempts: 0, sentAt: Date.now(), dob: dob.dob });
-
-  let emailed = true;
-  try {
-    if (DEMO_MODE && !provider()) emailed = false; // nothing to send with; the page shows the code
-    else await sendOtpEmail(email, code);
-  } catch (err) {
-    console.error('Email send failed:', err.message);
-    emailed = false;
-    if (!DEMO_MODE) {
-      otps.delete(email);
-      return res.status(500).json({ error: "Couldn't send the email. Check the server's email settings and try again." });
-    }
-  }
-
-  const out = { ok: true, expiresIn: OTP_TTL / 1000 };
-  if (DEMO_MODE) { out.demoCode = code; out.emailed = emailed; }
-  res.json(out);
-});
-
 let db = null;
 const ageOf = (dob) => (parseDob(dob) || { age: 0 }).age;
 
-app.post('/api/verify-otp', async (req, res) => {
-  const email = normEmail(req.body.email);
-  const code = String(req.body.code || '').trim();
-  const rec = otps.get(email);
-  if (!rec) return res.status(400).json({ error: 'No code found for this email. Ask for a new one.' });
-  if (Date.now() > rec.exp) { otps.delete(email); return res.status(400).json({ error: 'That code expired. Ask for a new one.' }); }
-  if (rec.attempts >= MAX_ATTEMPTS) { otps.delete(email); return res.status(429).json({ error: 'Too many wrong tries. Ask for a new code.' }); }
-  if (!/^\d{6}$/.test(code) || !safeEqual(hashCode(email, code), rec.hash)) {
-    rec.attempts++;
-    const left = MAX_ATTEMPTS - rec.attempts;
-    return res.status(400).json({ error: left > 0 ? `Wrong code. ${left} tries left.` : 'Wrong code. Ask for a new one.' });
-  }
-  otps.delete(email);
-  const user = await db.upsertUser(email, rec.dob);
+/* ---------------- Username + password accounts (like Roblox) ----------------
+   Username accounts get an internal id that looks like an email
+   (name@player.lspgames.invalid) so every other part of LSPGames works unchanged.
+   .invalid is a reserved domain, so nothing is ever sent there. */
+const USER_DOMAIN = 'player.lspgames.invalid';
+const UNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
+const idOfName = (u) => String(u || '').trim().toLowerCase() + '@' + USER_DOMAIN;
+const isNameAccount = (email) => String(email || '').endsWith('@' + USER_DOMAIN);
+function hashPass(p) { const salt = crypto.randomBytes(16); return 'scrypt$' + salt.toString('hex') + '$' + crypto.scryptSync(p, salt, 32).toString('hex'); }
+function checkPass(p, stored) {
+  const [kind, salt, hash] = String(stored || '').split('$');
+  if (kind !== 'scrypt' || !salt || !hash) return false;
+  const got = crypto.scryptSync(String(p), Buffer.from(salt, 'hex'), 32), want = Buffer.from(hash, 'hex');
+  return got.length === want.length && crypto.timingSafeEqual(got, want);
+}
+function nameProblem(u) {
+  if (!u) return 'Pick a username.';
+  if (u.length < 3 || u.length > 20) return 'Usernames are 3 to 20 characters.';
+  if (!UNAME_RE.test(u)) return 'Use only letters, numbers and _ in your username.';
+  if (/^_|_$/.test(u) || /__/.test(u)) return "Usernames can't start or end with _ or use __.";
+  if (/^(admin|support|lspgames|lsppay|moderator|system)/i.test(u)) return 'That username is not allowed.';
+  return '';
+}
+function passProblem(p, u) {
+  if (!p || p.length < 8) return 'Your password needs at least 8 characters.';
+  if (p.length > 72) return 'Your password is too long (72 characters max).';
+  if (u && p.toLowerCase().includes(u.toLowerCase())) return "Your password can't contain your username.";
+  if (/^(.)\1+$/.test(p) || /^(12345678|password|qwerty)/i.test(p)) return 'That password is too easy to guess.';
+  return '';
+}
+async function startSession(email, dob) {
   const token = crypto.randomBytes(32).toString('hex');
-  await db.createSession(token, email, rec.dob, Date.now() + SESSION_TTL);
-  res.json({ token, email, dob: rec.dob, points: user.points, migrated: !!user.migrated });
+  await db.createSession(token, email, dob, Date.now() + SESSION_TTL);
+  return token;
+}
+app.get('/api/username-free', async (req, res) => {
+  if (!allow(ipLog, 'uf:' + req.ip, 120, 60 * 1000)) return res.status(429).json({ error: 'Slow down.' });
+  const u = String(req.query.u || '').trim(), problem = nameProblem(u);
+  if (problem) return res.json({ free: false, error: problem });
+  const taken = await db.getUser(idOfName(u));
+  res.json({ free: !taken, error: taken ? 'That username is taken. Try another one.' : '' });
+});
+app.post('/api/signup', async (req, res) => {
+  const u = String(req.body.username || '').trim(), p = String(req.body.password || ''), dob = parseDob(req.body.dob);
+  if (!dob) return res.status(400).json({ error: 'Pick your birthday (you need to be 5 or older).' });
+  const np = nameProblem(u); if (np) return res.status(400).json({ error: np });
+  const pp = passProblem(p, u); if (pp) return res.status(400).json({ error: pp });
+  if (!allow(ipLog, 'signup:' + req.ip, 10, 3600 * 1000)) return res.status(429).json({ error: 'Too many new accounts from here. Try again in an hour.' });
+  const id = idOfName(u);
+  if (await db.getUser(id)) return res.status(409).json({ error: 'That username is taken. Try another one.' });
+  const user = await db.upsertUser(id, dob.dob);
+  await db.setUserFields(id, { username: u, pass: hashPass(p) });
+  const token = await startSession(id, dob.dob);
+  res.json({ token, email: id, username: u, dob: dob.dob, points: user.points, migrated: true });
+});
+app.post('/api/login', async (req, res) => {
+  const u = String(req.body.username || '').trim(), p = String(req.body.password || '');
+  if (!u || !p) return res.status(400).json({ error: 'Enter your username and password.' });
+  if (!allow(ipLog, 'login:' + req.ip, 40, 15 * 60 * 1000) || !allow(ipLog, 'login:' + u.toLowerCase(), 10, 15 * 60 * 1000))
+    return res.status(429).json({ error: 'Too many tries. Wait 15 minutes and try again.' });
+  const id = idOfName(u), user = UNAME_RE.test(u) ? await db.getUser(id) : null;
+  if (!user || !checkPass(p, user.pass)) return res.status(400).json({ error: 'Wrong username or password.' });
+  const token = await startSession(id, user.dob);
+  res.json({ token, email: id, username: user.username || u, dob: user.dob, points: user.points, migrated: true, lsppay: !!user.lsppay });
 });
 
 async function auth(req, res, next) {
@@ -209,7 +221,7 @@ async function auth(req, res, next) {
 
 app.get('/api/me', auth, async (req, res) => {
   const u = await db.getUser(req.session.email);
-  res.json({ email: req.session.email, dob: req.session.dob, points: u ? u.points : 0, migrated: !!(u && u.migrated), lsppay: !!(u && u.lsppay) });
+  res.json({ email: req.session.email, username: (u && u.username) || null, dob: req.session.dob, points: u ? u.points : 0, migrated: !!(u && (u.migrated || u.username)), lsppay: !!(u && u.lsppay) });
 });
 app.post('/api/logout', auth, async (req, res) => { await db.deleteSession(req.token); res.json({ ok: true }); });
 
@@ -234,19 +246,90 @@ const cookieOf = (req, name) => {
 const lspCallbackUrl = (req) => publicUrl(req) + '/auth/lsppay/callback';
 const sweep = (map) => { const now = Date.now(); for (const [k, v] of map) if (now > v.exp) map.delete(k); };
 
-app.get('/api/auth/providers', (req, res) => res.json({ lsppay: lspLoginOn() }));
+const NEED_BDAY = 'New to LSPGames? Open Sign up, pick your birthday, then press the same button there.';
+const OAUTH = {
+  google: { name: 'Google', id: process.env.GOOGLE_CLIENT_ID, secret: process.env.GOOGLE_CLIENT_SECRET, pkce: true,
+    auth: 'https://accounts.google.com/o/oauth2/v2/auth', token: 'https://oauth2.googleapis.com/token', user: 'https://openidconnect.googleapis.com/v1/userinfo', scope: 'openid email profile', extra: { prompt: 'select_account' } },
+  github: { name: 'GitHub', id: process.env.GITHUB_CLIENT_ID, secret: process.env.GITHUB_CLIENT_SECRET,
+    auth: 'https://github.com/login/oauth/authorize', token: 'https://github.com/login/oauth/access_token', user: 'https://api.github.com/user', scope: 'read:user user:email' },
+  yahoo: { name: 'Yahoo', id: process.env.YAHOO_CLIENT_ID, secret: process.env.YAHOO_CLIENT_SECRET, basic: true,
+    auth: 'https://api.login.yahoo.com/oauth2/request_auth', token: 'https://api.login.yahoo.com/oauth2/get_token', user: 'https://api.login.yahoo.com/openid/v1/userinfo', scope: 'openid email profile' },
+};
+const oauthOn = (p) => Boolean(OAUTH[p] && OAUTH[p].id && OAUTH[p].secret);
+const UA = { 'User-Agent': 'LSPGames/1.0 (+https://lspgames.onrender.com)', Accept: 'application/json' };
+
+app.get('/api/auth/providers', (req, res) => res.json({ lsppay: lspLoginOn(), google: oauthOn('google'), github: oauthOn('github'), yahoo: oauthOn('yahoo') }));
+
+app.get('/auth/:p(google|github|yahoo)', (req, res) => {
+  const P = OAUTH[req.params.p], bounce = (msg) => res.redirect('/?login_error=' + encodeURIComponent(msg));
+  if (!oauthOn(req.params.p)) return bounce(`Sign in with ${P.name} is not set up yet.`);
+  if (!allow(ipLog, 'oauth:' + req.ip, 30, 10 * 60 * 1000)) return bounce('Too many sign-in attempts. Try again in a few minutes.');
+  const dob = parseDob(req.query.dob);
+  sweep(oauthStates);
+  const state = crypto.randomBytes(16).toString('hex'), verifier = b64url(crypto.randomBytes(32));
+  oauthStates.set(state, { p: req.params.p, dob: dob ? dob.dob : null, verifier, exp: Date.now() + 10 * 60 * 1000 });
+  res.cookie(STATE_COOKIE + '_' + req.params.p, state, { httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: 10 * 60 * 1000, path: '/auth/' + req.params.p });
+  const url = new URL(P.auth);
+  url.searchParams.set('client_id', P.id); url.searchParams.set('redirect_uri', publicUrl(req) + `/auth/${req.params.p}/callback`);
+  url.searchParams.set('response_type', 'code'); url.searchParams.set('scope', P.scope); url.searchParams.set('state', state);
+  if (P.pkce) { url.searchParams.set('code_challenge', b64url(crypto.createHash('sha256').update(verifier).digest())); url.searchParams.set('code_challenge_method', 'S256'); }
+  for (const [k, v] of Object.entries(P.extra || {})) url.searchParams.set(k, v);
+  res.redirect(url.toString());
+});
+
+app.get('/auth/:p(google|github|yahoo)/callback', async (req, res) => {
+  const p = req.params.p, P = OAUTH[p], bounce = (msg) => res.redirect('/?login_error=' + encodeURIComponent(msg));
+  res.clearCookie(STATE_COOKIE + '_' + p, { path: '/auth/' + p });
+  if (req.query.error) return bounce(`${P.name} sign-in was cancelled.`);
+  const state = String(req.query.state || ''), rec = oauthStates.get(state);
+  oauthStates.delete(state);
+  if (!rec || rec.p !== p || Date.now() > rec.exp || !state || cookieOf(req, STATE_COOKIE + '_' + p) !== state) return bounce('That sign-in expired or did not match. Please try again.');
+  const code = String(req.query.code || ''); if (!code) return bounce(`${P.name} did not send a sign-in code. Please try again.`);
+  try {
+    const form = new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: publicUrl(req) + `/auth/${p}/callback` });
+    const headers = { ...UA, 'Content-Type': 'application/x-www-form-urlencoded' };
+    if (P.basic) headers.Authorization = 'Basic ' + Buffer.from(P.id + ':' + P.secret).toString('base64');
+    else { form.set('client_id', P.id); form.set('client_secret', P.secret); }
+    if (P.pkce) form.set('code_verifier', rec.verifier);
+    const tr = await fetch(P.token, { method: 'POST', headers, body: form, signal: AbortSignal.timeout(20000) });
+    const tok = await tr.json().catch(() => ({}));
+    if (!tr.ok || !tok.access_token) throw new Error(`token: ${tr.status} ${tok.error || ''} ${tok.error_description || ''}`);
+    const auth2 = { ...UA, Authorization: 'Bearer ' + tok.access_token };
+    const ur = await fetch(P.user, { headers: auth2, signal: AbortSignal.timeout(15000) });
+    const me = await ur.json().catch(() => ({}));
+    if (!ur.ok) throw new Error(`userinfo: ${ur.status}`);
+    let email = normEmail(me.email), verified = me.email_verified !== false && me.email_verified !== 'false';
+    if (p === 'github') { // GitHub keeps the verified addresses in a separate list
+      const er = await fetch('https://api.github.com/user/emails', { headers: auth2, signal: AbortSignal.timeout(15000) });
+      const list = er.ok ? await er.json().catch(() => []) : [];
+      const best = list.find((e) => e.primary && e.verified) || list.find((e) => e.verified);
+      email = best ? normEmail(best.email) : ''; verified = !!best;
+    }
+    if (!EMAIL_RE.test(email) || !verified || isNameAccount(email)) return bounce(`${P.name} did not share a verified email address. Check your ${P.name} account and try again.`);
+    const known = await db.getUser(email), dobv = (known && known.dob) || rec.dob;
+    if (!dobv) return bounce(NEED_BDAY);
+    const user = await db.upsertUser(email, dobv);
+    const token = await startSession(email, dobv);
+    sweep(handoffs);
+    const handoff = crypto.randomBytes(24).toString('hex');
+    handoffs.set(handoff, { login: { token, email, dob: dobv, points: user.points, migrated: !!user.migrated, lsppay: !!user.lsppay, via: P.name }, exp: Date.now() + 60 * 1000 });
+    res.redirect('/?login=' + handoff);
+  } catch (e) {
+    console.error(`[${p}-login]`, e.message);
+    bounce(`Couldn't finish signing in with ${P.name}. Please try again.`);
+  }
+});
 
 app.get('/auth/lsppay', (req, res) => {
   const bounce = (msg) => res.redirect('/?login_error=' + encodeURIComponent(msg));
-  if (!lspLoginOn()) return bounce('Sign in with LSP-Pay is not set up yet. Use an email code.');
-  const dob = parseDob(req.query.dob);
-  if (!dob) return bounce('Enter your date of birth first.');
+  if (!lspLoginOn()) return bounce('Sign in with LSP-Pay is not set up yet.');
+  const dob = parseDob(req.query.dob); // only needed for a brand-new player
   if (!allow(ipLog, 'oauth:' + req.ip, 30, 10 * 60 * 1000)) return bounce('Too many sign-in attempts. Try again in a few minutes.');
 
   sweep(oauthStates);
   const state = crypto.randomBytes(16).toString('hex');
   const verifier = b64url(crypto.randomBytes(32));
-  oauthStates.set(state, { dob: dob.dob, verifier, exp: Date.now() + 10 * 60 * 1000 });
+  oauthStates.set(state, { dob: dob ? dob.dob : null, verifier, exp: Date.now() + 10 * 60 * 1000 });
   res.cookie(STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: 10 * 60 * 1000, path: '/auth/lsppay' });
 
   const url = new URL(LSP.url + '/oauth/authorize');
@@ -291,23 +374,24 @@ app.get('/auth/lsppay/callback', async (req, res) => {
     const email = normEmail(me.email);
     if (!EMAIL_RE.test(email) || me.email_verified === false) return bounce('LSP-Pay did not share a verified email. Allow "Your email address" and try again.');
 
-    const user = await db.upsertUser(email, rec.dob);
+    const known = await db.getUser(email), dobv = (known && known.dob) || rec.dob;
+    if (!dobv) return bounce(NEED_BDAY);
+    const user = await db.upsertUser(email, dobv);
     await db.markLspPay(email);
-    const token = crypto.randomBytes(32).toString('hex');
-    await db.createSession(token, email, rec.dob, Date.now() + SESSION_TTL);
+    const token = await startSession(email, dobv);
 
     sweep(handoffs);
     const handoff = crypto.randomBytes(24).toString('hex');
-    handoffs.set(handoff, { login: { token, email, dob: rec.dob, points: user.points, migrated: !!user.migrated, lsppay: true }, exp: Date.now() + 60 * 1000 });
+    handoffs.set(handoff, { login: { token, email, dob: dobv, points: user.points, migrated: !!user.migrated, lsppay: true, via: 'LSP-Pay' }, exp: Date.now() + 60 * 1000 });
     res.redirect('/?login=' + handoff);
   } catch (e) {
     console.error('[lsppay-login]', e.message);
-    bounce("Couldn't finish signing in with LSP-Pay. Try again, or use an email code.");
+    bounce("Couldn't finish signing in with LSP-Pay. Try again, or use your username and password.");
   }
 });
 
 /** The app trades the one-time handoff for its session, so the token never sits in a URL. */
-app.post('/api/auth/lsppay/finish', (req, res) => {
+app.post(['/api/auth/finish', '/api/auth/lsppay/finish'], (req, res) => {
   const key = String(req.body.handoff || '');
   const h = handoffs.get(key);
   handoffs.delete(key);
@@ -427,7 +511,7 @@ app.post('/api/pay/create', auth, async (req, res) => {
     try {
       // LSP-Pay may be asleep on Render's free plan: wait up to ~70s, retrying on network errors and 5xx.
       // Safe to retry because the Idempotency-Key makes LSP-Pay return the same order.
-      const payload = JSON.stringify({ amount: rupees, description: `LSPGames: ${label}`, reference: orderId, customer_email: email, items: [{ name: label, qty: 1, unit: rupees }] });
+      const payload = JSON.stringify({ amount: rupees, description: `LSPGames: ${label}`, reference: orderId, customer_email: isNameAccount(email) ? undefined : email, items: [{ name: label, qty: 1, unit: rupees }] });
       let r, data = {}, lastErr = '';
       for (let attempt = 1; attempt <= 5; attempt++) {
         try {

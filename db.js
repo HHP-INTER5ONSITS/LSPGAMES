@@ -33,6 +33,7 @@ async function mongoStore() {
       return users.findOne({ email });
     },
     getUser: (email) => users.findOne({ email }),
+    setUserFields: (email, f) => users.updateOne({ email }, { $set: f }),
     createSession: (token, email, dob, exp) => sessions.insertOne({ token, email, dob, exp: new Date(exp) }),
     async getSession(token) { const s = await sessions.findOne({ token }); return s && s.exp > new Date() ? s : null; },
     deleteSession: (token) => sessions.deleteOne({ token }),
@@ -89,6 +90,7 @@ function fileStore() {
       data.users[email].dob = dob; persist(); return clone(data.users[email]);
     },
     async getUser(email) { return clone(data.users[email]); },
+    async setUserFields(email, f) { if (data.users[email]) { Object.assign(data.users[email], f); persist(); } },
     async createSession(token, email, dob, exp) { data.sessions[token] = { token, email, dob, exp }; persist(); },
     async getSession(token) { const s = data.sessions[token]; return s && s.exp > Date.now() ? clone(s) : null; },
     async deleteSession(token) { delete data.sessions[token]; persist(); },

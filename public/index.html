@@ -33,7 +33,25 @@ button{font:inherit;cursor:pointer;color:inherit}
 .steps{display:flex;gap:6px;margin:22px 0 18px}
 .steps span{height:6px;flex:1;border-radius:6px;background:var(--line)}
 .steps span.on{background:var(--brand)}
-.auth h1{font-size:26px;margin-bottom:6px}
+.auth h1{font-size:24px;margin:14px 0 2px}
+.au-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#eef1f7;border-radius:14px;padding:5px;margin-top:16px}
+.au-tab{border:0;background:none;border-radius:10px;padding:10px;font:600 16px Fredoka,system-ui,sans-serif;color:var(--muted)}
+.au-tab.on{background:#fff;color:var(--ink);box-shadow:0 2px 0 var(--line)}
+.auth input:not([type=checkbox]){width:100%;height:50px;border:2px solid var(--line);border-radius:12px;padding:0 14px;font:700 17px Nunito,system-ui,sans-serif;color:var(--ink);background:#fff}
+.auth input:focus{border-color:var(--brand);outline:none}
+.hint{font-size:13px;font-weight:700;color:var(--muted);margin:5px 2px 0}.hint.bad{color:#d9324a}.hint.good{color:#0b8f6e}
+.pw{position:relative}.pw input{padding-right:52px}
+.pw-eye{position:absolute;right:6px;top:6px;width:40px;height:38px;border:0;background:none;font-size:18px;opacity:.6}
+.fine{font-size:12px;color:var(--muted);text-align:center;margin-top:10px}
+.prov{display:grid;gap:10px}
+.prov-btn{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:0}
+.prov-btn .pv-ic{display:grid;place-items:center;width:26px;height:26px;border-radius:7px;font:800 14px Nunito,system-ui,sans-serif}
+.prov-btn.google{background:#fff;color:#16203d;border:2px solid var(--line);box-shadow:0 4px 0 var(--line)}.prov-btn.google .pv-ic{background:#4285f4;color:#fff}
+.prov-btn.github{background:#24292f;color:#fff;box-shadow:0 4px 0 #000}.prov-btn.github .pv-ic{background:#fff;color:#24292f}
+.prov-btn.yahoo{background:#6001d2;color:#fff;box-shadow:0 4px 0 #3d0087}.prov-btn.yahoo .pv-ic{background:#fff;color:#6001d2}
+#prov-wrap .lsppay-btn{margin-top:0;display:flex;align-items:center;justify-content:center;gap:10px}
+[data-prov][hidden]{display:none!important}
+#s-dob .dob-row{grid-template-columns:1.5fr 1fr 1.15fr}
 .field{margin-top:18px}
 label{display:block;font-weight:800;font-size:14px;margin-bottom:6px}
 select,input[type=email]{width:100%;height:50px;border:2px solid var(--line);border-radius:12px;padding:0 12px;font:700 16px Nunito,system-ui,sans-serif;background:#fff;color:var(--ink)}
@@ -215,71 +233,52 @@ select:focus,input:focus{border-color:var(--brand);outline:none}
 
 <section class="screen active" id="s-boot"><div class="boot"><div class="logo"><span class="mark">▶</span>LSPGames</div></div></section>
 
-<!-- Step 1: date of birth -->
+<!-- Sign up / log in (like Roblox): birthday, username, password, or a provider -->
 <section class="screen auth" id="s-dob">
   <div class="auth-card">
     <div class="logo"><span class="mark">▶</span>LSPGames</div>
-    <div class="steps" aria-label="Step 1 of 3"><span class="on"></span><span></span><span></span></div>
-    <h1>When's your birthday?</h1>
-    <p class="muted">This keeps LSPGames right for your age.</p>
-    <div class="field">
-      <label for="dob-d">Date of birth</label>
-      <div class="dob-row">
-        <select id="dob-d" aria-label="Day"></select>
-        <select id="dob-m" aria-label="Month"></select>
-        <select id="dob-y" aria-label="Year"></select>
-      </div>
+    <div class="au-tabs" role="tablist">
+      <button class="au-tab on" data-au="signup" role="tab" type="button">Sign up</button>
+      <button class="au-tab" data-au="login" role="tab" type="button">Log in</button>
     </div>
     <p class="err" id="dob-err" role="alert"></p>
-    <button class="btn primary block" id="dob-next">Continue</button>
-  </div>
-</section>
-
-<!-- Step 2: email -->
-<section class="screen auth" id="s-email">
-  <form class="auth-card" id="email-form" novalidate>
-    <button type="button" class="back" data-go="s-dob">‹ Back</button>
-    <div class="logo"><span class="mark">▶</span>LSPGames</div>
-    <div class="steps" aria-label="Step 2 of 3"><span class="on"></span><span class="on"></span><span></span></div>
-    <h1>What's your email?</h1>
-    <p class="muted">We'll send a 6-digit code to sign you in.</p>
-    <div class="field">
-      <label for="email">Email</label>
-      <input type="email" id="email" autocomplete="email" placeholder="name@gmail.com" required>
+    <form id="signup-form" novalidate>
+      <h1>Sign up and start having fun!</h1>
+      <div class="field">
+        <label for="dob-m">Birthday</label>
+        <div class="dob-row">
+          <select id="dob-m" aria-label="Month"></select>
+          <select id="dob-d" aria-label="Day"></select>
+          <select id="dob-y" aria-label="Year"></select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="su-user">Username</label>
+        <input id="su-user" autocomplete="username" maxlength="20" placeholder="Don't use your real name" autocapitalize="off" spellcheck="false">
+        <p class="hint" id="su-user-hint">3 to 20 letters, numbers or _</p>
+      </div>
+      <div class="field">
+        <label for="su-pass">Password</label>
+        <div class="pw"><input id="su-pass" type="password" autocomplete="new-password" placeholder="At least 8 characters"><button type="button" class="pw-eye" aria-label="Show password">👁</button></div>
+      </div>
+      <button class="btn primary block" id="su-go" type="submit">Sign up</button>
+      <p class="fine">By signing up you agree to play nicely. Kids under 13 should ask a parent first.</p>
+    </form>
+    <form id="login-form" novalidate hidden>
+      <h1>Log in to LSPGames</h1>
+      <div class="field"><label for="li-user">Username</label><input id="li-user" autocomplete="username" maxlength="20" autocapitalize="off" spellcheck="false"></div>
+      <div class="field"><label for="li-pass">Password</label><div class="pw"><input id="li-pass" type="password" autocomplete="current-password"><button type="button" class="pw-eye" aria-label="Show password">👁</button></div></div>
+      <button class="btn primary block" id="li-go" type="submit">Log in</button>
+    </form>
+    <div id="prov-wrap" hidden>
+      <p class="or-line"><span id="prov-or">or sign up with</span></p>
+      <div class="prov">
+        <button class="btn block prov-btn google" data-prov="google" type="button" hidden><span class="pv-ic">G</span>Continue with Google</button>
+        <button class="btn block prov-btn github" data-prov="github" type="button" hidden><span class="pv-ic">⌥</span>Continue with GitHub</button>
+        <button class="btn block prov-btn yahoo" data-prov="yahoo" type="button" hidden><span class="pv-ic">Y!</span>Continue with Yahoo</button>
+        <button class="btn block lsppay-btn" data-prov="lsppay" type="button" hidden><span class="lsppay-mark" aria-hidden="true">₹</span>Continue with LSP-Pay</button>
+      </div>
     </div>
-    <p class="err" id="email-err" role="alert"></p>
-    <button class="btn primary block" id="email-next" type="submit">Send code</button>
-    <div id="lsppay-wrap" hidden>
-      <p class="or-line"><span>or</span></p>
-      <button class="btn block lsppay-btn" id="lsppay-btn" type="button"><span class="lsppay-mark" aria-hidden="true">₹</span>Sign in with LSP-Pay</button>
-    </div>
-  </form>
-</section>
-
-<!-- Step 3: OTP -->
-<section class="screen auth" id="s-otp">
-  <div class="auth-card">
-    <button type="button" class="back" data-go="s-email">‹ Change email</button>
-    <div class="logo"><span class="mark">▶</span>LSPGames</div>
-    <div class="steps" aria-label="Step 3 of 3"><span class="on"></span><span class="on"></span><span class="on"></span></div>
-    <h1 id="otp-title">Check your email</h1>
-    <p class="muted" id="otp-sub">Enter the code we sent to <b id="otp-to"></b>. Look in spam if it's not there.</p>
-    <div class="otp" role="group" aria-label="6-digit code">
-      <input inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="Digit 1">
-      <input inputmode="numeric" maxlength="1" aria-label="Digit 2">
-      <input inputmode="numeric" maxlength="1" aria-label="Digit 3">
-      <input inputmode="numeric" maxlength="1" aria-label="Digit 4">
-      <input inputmode="numeric" maxlength="1" aria-label="Digit 5">
-      <input inputmode="numeric" maxlength="1" aria-label="Digit 6">
-    </div>
-    <div class="demo-box" id="demo-box" hidden>
-      <span class="demo-tag">Demo mode</span>
-      <p>Your code is <b id="demo-code"></b></p>
-      <button class="btn ghost" id="demo-fill" type="button">Fill it in</button>
-    </div>
-    <p class="err" id="otp-err" role="alert"></p>
-    <button class="btn primary block" id="otp-verify">Verify and play</button>
-    <div class="row"><span class="muted">Didn't get it?</span><button class="link" id="resend">Resend code</button></div>
   </div>
 </section>
 
@@ -417,72 +416,43 @@ let profile=null,S=null;
   const cy=new Date().getFullYear();let o='<option value="">Year</option>';for(let i=cy;i>=cy-100;i--)o+=`<option>${i}</option>`;$('#dob-y').innerHTML=o;
 })();
 function ageOf(dob){const [y,m,d]=dob.split('-').map(Number);const now=new Date();let a=now.getFullYear()-y;if(now<new Date(now.getFullYear(),m-1,d))a--;return a}
-$('#dob-next').onclick=()=>{
-  const d=+$('#dob-d').value,m=+$('#dob-m').value,y=+$('#dob-y').value,err=$('#dob-err');
-  if(!d||!m||!y){err.textContent='Pick your day, month and year.';return}
-  const dt=new Date(y,m-1,d);if(dt.getMonth()!==m-1){err.textContent=`${MONTHS[m-1]} ${y} doesn't have ${d} days.`;return}
+/* Roblox-style: birthday, username and password, or Google / GitHub / Yahoo / LSP-Pay. */
+let auMode='signup';
+function setAuth(m){auMode=m;$$('.au-tab').forEach(t=>t.classList.toggle('on',t.dataset.au===m));$('#signup-form').hidden=m!=='signup';$('#login-form').hidden=m!=='login';$('#dob-err').textContent='';$('#prov-or').textContent=m==='signup'?'or sign up with':'or log in with';setTimeout(()=>$(m==='signup'?'#dob-m':'#li-user').focus(),30)}
+$$('.au-tab').forEach(t=>t.onclick=()=>setAuth(t.dataset.au));
+$$('.pw-eye').forEach(b=>b.onclick=()=>{const i=b.previousElementSibling;i.type=i.type==='password'?'text':'password';b.style.opacity=i.type==='text'?1:.6});
+function readDob(){
+  const d=+$('#dob-d').value,m=+$('#dob-m').value,y=+$('#dob-y').value;
+  if(!d||!m||!y)return{err:'Pick your birthday: month, day and year.'};
+  const dt=new Date(y,m-1,d);if(dt.getMonth()!==m-1)return{err:`${MONTHS[m-1]} ${y} doesn't have ${d} days.`};
   const dob=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-  if(dt>new Date()){err.textContent="That date hasn't happened yet.";return}
-  if(ageOf(dob)<5){err.textContent='You need to be at least 5 to play.';return}
-  err.textContent='';pending.dob=dob;show('s-email');$('#email').focus();
-};
-$('#email-form').addEventListener('submit',e=>{e.preventDefault();sendOtp(false)});
-// Sign in with LSP-Pay: the button only shows when the server has LSP-Pay keys.
-fetch('/api/auth/providers').then(r=>r.json()).then(p=>{if(p.lsppay)$('#lsppay-wrap').hidden=false}).catch(()=>{});
-$('#lsppay-btn').onclick=()=>{
-  if(!pending.dob){show('s-dob');return}
-  const b=$('#lsppay-btn');b.disabled=true;b.innerHTML='<span class="spin"></span>';
-  location.href='/auth/lsppay?dob='+encodeURIComponent(pending.dob);
-};
-async function sendOtp(isResend){
-  const email=(isResend?pending.email:$('#email').value).trim().toLowerCase();
-  const err=isResend?$('#otp-err'):$('#email-err');
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){err.textContent='Enter a valid email, like name@gmail.com.';return}
-  err.textContent='';pending.email=email;
-  const btn=isResend?$('#resend'):$('#email-next');setBusy(btn,true);
-  try{
-    const d=await api('/api/send-otp',{email,dob:pending.dob});
-    if(!isResend){show('s-otp');$('#otp-to').textContent=email}
-    clearOtp();startCooldown(30);
-    showDemoCode(d,email);
-  }catch(e){err.textContent=e.message;if(isResend)setBusy(btn,false,'Resend code')}
-  finally{if(!isResend)setBusy(btn,false,'Send code')}
+  if(dt>new Date())return{err:"That birthday hasn't happened yet."};
+  if(ageOf(dob)<5)return{err:'You need to be at least 5 to play.'};
+  return{dob};
 }
-// Demo mode: the server returns the code so sign-in works without email.
-function showDemoCode(d,email){
-  const box=$('#demo-box');
-  if(!d.demoCode){box.hidden=true;$('#otp-title').textContent='Check your email';
-    $('#otp-sub').innerHTML='Enter the code we sent to <b id="otp-to"></b>. Look in spam if it\'s not there.';$('#otp-to').textContent=email;
-    toast('Code sent to '+email);return}
-  $('#demo-code').textContent=d.demoCode;box.hidden=false;
-  $('#otp-title').textContent=d.emailed?'Check your email':'Enter your code';
-  $('#otp-sub').textContent=d.emailed?`We also emailed it to ${email}.`:`Demo mode: your code for ${email} is shown below instead of by email.`;
-  $('#demo-fill').onclick=()=>fillOtp(d.demoCode);
-}
-const boxes=$$('.otp input');
-boxes.forEach((b,i)=>{
-  b.addEventListener('input',()=>{const v=b.value.replace(/\D/g,'');if(v.length>1){fillOtp(v);return}b.value=v;if(v&&i<5)boxes[i+1].focus();if(getOtp().length===6)verify()});
-  b.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!b.value&&i>0){boxes[i-1].focus();boxes[i-1].value=''}if(e.key==='Enter')verify()});
-  b.addEventListener('paste',e=>{e.preventDefault();fillOtp((e.clipboardData.getData('text')||'').replace(/\D/g,''))});
+function signedIn(d,how){store.set('lsp_token',d.token);profile={email:d.email,username:d.username||null,dob:d.dob,lsppay:!!d.lsppay};store.set('lsp_profile',profile);return afterLogin(d).then(()=>{enterHub();toast(how)})}
+// live username check, like Roblox
+let ucT=0;$('#su-user').addEventListener('input',()=>{const u=$('#su-user').value.trim(),h=$('#su-user-hint');clearTimeout(ucT);if(!u){h.className='hint';h.textContent='3 to 20 letters, numbers or _';return}
+  ucT=setTimeout(async()=>{try{const r=await api('/api/username-free?u='+encodeURIComponent(u));if($('#su-user').value.trim()!==u)return;h.className='hint '+(r.free?'good':'bad');h.textContent=r.free?'✓ Username is available':r.error}catch(e){}},350)});
+$('#signup-form').addEventListener('submit',async e=>{e.preventDefault();const err=$('#dob-err'),b=$('#dob'+'-err');
+  const r=readDob();if(r.err){err.textContent=r.err;return}
+  const username=$('#su-user').value.trim(),password=$('#su-pass').value;
+  if(!username){err.textContent='Pick a username.';return}if(password.length<8){err.textContent='Your password needs at least 8 characters.';return}
+  const btn=$('#su-go');setBusy(btn,true);
+  try{const d=await api('/api/signup',{username,password,dob:r.dob});err.textContent='';await signedIn(d,`Welcome to LSPGames, ${d.username}!`)}
+  catch(x){err.textContent=x.message}finally{setBusy(btn,false,'Sign up')}});
+$('#login-form').addEventListener('submit',async e=>{e.preventDefault();const err=$('#dob-err');
+  const username=$('#li-user').value.trim(),password=$('#li-pass').value;if(!username||!password){err.textContent='Enter your username and password.';return}
+  const btn=$('#li-go');setBusy(btn,true);
+  try{const d=await api('/api/login',{username,password});err.textContent='';await signedIn(d,`Welcome back, ${d.username}!`)}
+  catch(x){err.textContent=x.message;$('#li-pass').value=''}finally{setBusy(btn,false,'Log in')}});
+// provider buttons only show when the server has that provider's keys
+fetch('/api/auth/providers').then(r=>r.json()).then(p=>{let any=false;$$('[data-prov]').forEach(b=>{const on=!!p[b.dataset.prov];b.hidden=!on;any=any||on});$('#prov-wrap').hidden=!any}).catch(()=>{});
+$$('[data-prov]').forEach(b=>b.onclick=()=>{
+  let q='';
+  if(auMode==='signup'){const r=readDob();if(r.err){$('#dob-err').textContent=r.err+' We need it before you continue.';return}q='?dob='+encodeURIComponent(r.dob)}
+  b.disabled=true;b.innerHTML='<span class="spin"></span>';location.href='/auth/'+b.dataset.prov+q;
 });
-function fillOtp(v){v=v.slice(0,6);boxes.forEach((b,i)=>b.value=v[i]||'');boxes[Math.min(v.length,5)].focus();if(v.length===6)verify()}
-const getOtp=()=>boxes.map(b=>b.value).join('');
-function clearOtp(){boxes.forEach(b=>b.value='');setTimeout(()=>boxes[0].focus(),50)}
-let cdInt;function startCooldown(s){const b=$('#resend');clearInterval(cdInt);let t=s;const tick=()=>{if(t<=0){b.disabled=false;b.textContent='Resend code';clearInterval(cdInt);return}b.disabled=true;b.textContent=`Resend in ${t}s`;t--};tick();cdInt=setInterval(tick,1000)}
-$('#resend').onclick=()=>sendOtp(true);
-$('#otp-verify').onclick=()=>verify();
-let verifying=false;
-async function verify(){
-  if(verifying)return;const code=getOtp();
-  if(code.length<6){$('#otp-err').textContent='Enter all 6 digits.';return}
-  verifying=true;const btn=$('#otp-verify');setBusy(btn,true);
-  try{
-    const d=await api('/api/verify-otp',{email:pending.email,code});
-    store.set('lsp_token',d.token);profile={email:d.email,dob:d.dob,lsppay:!!d.lsppay};store.set('lsp_profile',profile);await afterLogin(d);
-    $('#otp-err').textContent='';enterHub();toast('Verified. Welcome to LSPGames!');
-  }catch(e){$('#otp-err').textContent=e.message;const o=$('.otp');o.classList.remove('shake');void o.offsetWidth;o.classList.add('shake');clearOtp()}
-  finally{verifying=false;setBusy(btn,false,'Verify and play')}
-}
 
 /* ================= hub ================= */
 const POINTS_MAX=10000000;
@@ -514,9 +484,9 @@ function loadSave(){S=Object.assign({owned:['pistol'],equipped:'pistol',unlocked
 function save(){store.set('lsp_save_'+profile.email,S)}
 function refreshPoints(){if(!profile)return;const p=Wallet.get().toLocaleString();$$('.js-points').forEach(e=>e.textContent=p)}
 function enterHub(){
-  loadSave();const name=profile.email.split('@')[0];
+  loadSave();const name=profile.username||profile.email.split('@')[0];
   $('#hello').textContent=`Hi, ${name}`;$('#avatar-btn').textContent=name[0].toUpperCase();
-  $('#menu-email').textContent=profile.email;$('#menu-age').textContent=profile.dob?`Age ${ageOf(profile.dob)}`:'';
+  $('#menu-email').textContent=profile.username?'@'+profile.username:profile.email;$('#menu-age').textContent=profile.dob?`Age ${ageOf(profile.dob)}`:'';
   $('#hub-progress').textContent=S.cleared>=MAXL?'All 15 levels cleared!':`Level ${S.unlocked} of ${MAXL} unlocked`;
   refreshPoints();show('s-hub');requestAnimationFrame(drawHubArt);if(window.LSPG)LSPG.runHub();
 }
@@ -897,15 +867,14 @@ $('#st-back').onclick=()=>enterHub();
   const Q=new URLSearchParams(location.search),handoff=Q.get('login'),loginErr=Q.get('login_error');
   if(handoff||loginErr)history.replaceState(null,'',location.pathname);
   if(handoff){
-    try{const d=await api('/api/auth/lsppay/finish',{handoff});
-      store.set('lsp_token',d.token);profile={email:d.email,dob:d.dob,lsppay:!!d.lsppay};store.set('lsp_profile',profile);
-      await afterLogin(d);enterHub();toast('Signed in with LSP-Pay. Welcome to LSPGames!');return}
+    try{const d=await api('/api/auth/finish',{handoff});
+      await signedIn(d,`Signed in with ${d.via||'your account'}. Welcome to LSPGames!`);return}
     catch(e){show('s-dob');$('#dob-err').textContent=e.message;return}
   }
   const tok=store.get('lsp_token');
-  if(loginErr&&!tok){show('s-dob');$('#dob-err').textContent=loginErr;return}
+  if(loginErr&&!tok){show('s-dob');if(/New to LSPGames/.test(loginErr))setAuth('signup');$('#dob-err').textContent=loginErr;return}
   if(loginErr)setTimeout(()=>toast(loginErr,4500),300);
-  if(tok){try{const me=await api('/api/me');profile={email:me.email,dob:me.dob,lsppay:!!me.lsppay};store.set('lsp_profile',profile);await afterLogin(me);enterHub();const pay=new URLSearchParams(location.search).get('payment');if(pay){history.replaceState(null,'',location.pathname);openStore(pay)}return}catch(e){store.del('lsp_token')}}
+  if(tok){try{const me=await api('/api/me');profile={email:me.email,username:me.username||null,dob:me.dob,lsppay:!!me.lsppay};store.set('lsp_profile',profile);await afterLogin(me);enterHub();const pay=new URLSearchParams(location.search).get('payment');if(pay){history.replaceState(null,'',location.pathname);openStore(pay)}return}catch(e){store.del('lsp_token')}}
   show('s-dob');
 })();
 </script>
