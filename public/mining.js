@@ -31,6 +31,60 @@
   const g = A.g;
   let M = null;
 
+  /* ---------- 3D mine shaft ---------- */
+  const X = (x) => x - COLS / 2 + 0.5, Y = (y) => -y;
+  const V = L.g3d(A, { sky: ['#6fb2ee', '#d4ecfb'], fogNear: 18, fogFar: 60, shadowSize: 12 });
+  const D3 = {};
+  V.onReady((V) => {
+    const T = V.T, sc = V.scene;
+    const rock = V.tex(64, 64, (c) => { c.fillStyle = '#ffffff'; c.fillRect(0, 0, 64, 64); for (let i = 0; i < 260; i++) { const v = 170 + Math.random() * 85; c.fillStyle = `rgb(${v},${v},${v})`; c.fillRect(Math.random() * 64, Math.random() * 64, 3 + Math.random() * 6, 2 + Math.random() * 4); } c.strokeStyle = 'rgba(0,0,0,.18)'; c.lineWidth = 3; c.strokeRect(0, 0, 64, 64); });
+    const geo = new T.BoxGeometry(1, 1, 1);
+    D3.blocks = new T.InstancedMesh(geo, new T.MeshStandardMaterial({ map: rock, roughness: 0.9 }), COLS * 22); D3.blocks.castShadow = D3.blocks.receiveShadow = true; D3.blocks.frustumCulled = false; sc.add(D3.blocks);
+    D3.back = new T.InstancedMesh(geo, new T.MeshStandardMaterial({ map: rock, roughness: 1, color: '#5a4a42' }), COLS * 22); D3.back.receiveShadow = true; D3.back.frustumCulled = false; sc.add(D3.back);
+    D3.ores = new T.InstancedMesh(new T.OctahedronGeometry(0.16, 0), new T.MeshStandardMaterial({ roughness: 0.15, metalness: 0.3, emissive: '#222222' }), COLS * 22 * 3); D3.ores.frustumCulled = false; sc.add(D3.ores);
+    D3.crack = V.box(1.02, 1.02, 0.02, V.M('#000000', { transparent: true, opacity: 0.4 }), 0, 0, 0.52, sc, false);
+    // surface: grass strip, hut, trees, hills
+    V.box(COLS + 40, 0.3, 14, '#5cc47a', 0, Y(SURF) + 0.62, -6.5, sc);
+    for (const sx of [-1, 1]) V.box(40, ROWS + 20, 3, V.M('#3a2f2a', { roughness: 1 }), sx * (COLS / 2 + 20), Y(SURF) - (ROWS + 20) / 2 + 0.45, -0.6, sc, false);
+    const hut = new T.Group(); hut.position.set(X(1), Y(SURF) + 0.6, -0.6); sc.add(hut);
+    V.box(2.6, 1.6, 1.4, '#ffb31a', 0, 0.8, 0, hut); const roof = new T.Mesh(new T.ConeGeometry(2, 0.9, 4), V.M('#c0392b')); roof.rotation.y = Math.PI / 4; roof.position.y = 2.05; roof.scale.z = 0.6; roof.castShadow = true; hut.add(roof);
+    const sign = V.sprite('💰 SELL', 2.2, 0.7, '#16203d'); sign.position.set(X(1), Y(SURF) + 3.4, 0);
+    for (let i = 0; i < 16; i++) V.tree(-22 + i * 3 + Math.random(), -5 - Math.random() * 8, 0.8 + Math.random() * 0.6, Y(SURF) + 0.75);
+    D3.miner = V.person('#2f6bff', '#3d4a6b', '#f1c27d', '#ffb31a');
+    const pick = new T.Group(); V.box(0.06, 0.8, 0.06, '#8b5a33', 0, -0.3, 0, pick); V.box(0.5, 0.08, 0.08, '#9aa3b5', 0, 0.1, 0, pick); pick.position.set(0, -0.6, 0.15); D3.miner.userData.arms[1].add(pick);
+    D3.lamp = new T.PointLight('#fff1c9', 14, 9, 1.6); sc.add(D3.lamp);
+    D3.m = new T.Matrix4(); D3.c = new T.Color(); D3.hemi = sc.children.find((o) => o.isHemisphereLight); D3.fogC = new T.Color();
+    V.camera.fov = 50; V.camera.updateProjectionMatrix(); V.follow = new T.Vector3();
+  });
+  function draw3() {
+    const m = D3.m, c = D3.c;
+    if (M.tap) { M.tap.t -= 1 / 60; tryMove(M.tap.dx, M.tap.dy); if (M.tap.t <= 0 || !M.dig) { if (!M.dig) M.tap = null; } }
+    const cy = Math.max(SURF - 2, M.py);
+    V.camera.position.set(X(M.px) * 0.35, Y(cy) + 1.8, 11.5); V.camera.lookAt(X(M.px) * 0.35, Y(cy) - 0.6, 0);
+    V.follow.set(X(M.px), Y(M.py), 0);
+    let n = 0, b = 0, o = 0;
+    const y0 = Math.max(0, Math.floor(cy) - 9), y1 = Math.min(ROWS - 1, Math.floor(cy) + 9);
+    for (let y = y0; y <= y1; y++) for (let x = 0; x < COLS; x++) {
+      const cell = M.grid[y][x]; if (!cell) continue;
+      if (cell.dug) { m.makeTranslation(X(x), Y(y), -1); D3.back.setMatrixAt(b++, m); continue; }
+      m.makeTranslation(X(x), Y(y), 0); D3.blocks.setMatrixAt(n, m); D3.blocks.setColorAt(n++, c.set(y === SURF ? '#7a5a3a' : LAYERS[cell.layer].color));
+      if (cell.ore != null) { c.set(ORES[cell.ore].color); for (const [ox, oy] of [[-0.22, 0.2], [0.18, 0.05], [-0.05, -0.24]]) { m.makeRotationZ(0.6); m.setPosition(X(x) + ox, Y(y) + oy, 0.5); D3.ores.setMatrixAt(o, m); D3.ores.setColorAt(o++, c); } }
+    }
+    for (const it of [D3.blocks, D3.back, D3.ores]) { it.instanceMatrix.needsUpdate = true; if (it.instanceColor) it.instanceColor.needsUpdate = true; }
+    D3.blocks.count = n; D3.back.count = b; D3.ores.count = o;
+    D3.crack.visible = !!M.dig; if (M.dig) { D3.crack.position.set(X(M.dig.x), Y(M.dig.y), 0.52); D3.crack.material.opacity = 0.15 + M.dig.p * 0.5; }
+    const p = D3.miner; p.position.set(X(M.px), Y(M.py) - 0.5, 0); p.rotation.y = M.face > 0 ? Math.PI / 2 : -Math.PI / 2; p.scale.setScalar(0.5);
+    if (M.dig) { p.userData.arms[1].rotation.x = -1.6 + Math.sin(M.t * 26) * 0.9; p.rotation.y = M.dig.y > M.y ? 0.2 : M.dig.y < M.y ? Math.PI - 0.2 : p.rotation.y; } else { p.userData.arms[1].rotation.x = 0; V.walk(p, M.t * 12, M.move > 0 ? 1 : 0); }
+    D3.lamp.position.set(X(M.px) + M.face * 0.3, Y(M.py) + 0.4, 1.2);
+    // it gets darker the deeper you go
+    const dark = Math.min(0.92, Math.max(0, (M.py - SURF - 2) / 30));
+    if (D3.hemi) D3.hemi.intensity = 1 - dark * 0.85; V.sun.intensity = 2.1 * (1 - dark);
+    D3.fogC.set('#d4ecfb').lerp(c.set('#120c18'), dark); V.scene.fog.color.copy(D3.fogC); V.scene.background = dark > 0.05 ? D3.fogC : V.scene.background;
+    for (const q of M.parts) if (!q.shown && !q.text) { q.shown = true; V.puff(X(q.x / T - 0.5), Y(q.y / T - 0.5), 0.6, q.c, 0.14, 0.45, q.vx / T, -q.vy / T, 1, 0, 1, 12); }
+    V.frame();
+    for (const q of M.parts) if (q.text) V.label(X(q.x / T - 0.5), Y(q.y / T) + 0.6, 0.5, q.text, { size: 18, color: '#ffd640', stroke: 'rgba(0,0,0,.6)', alpha: Math.min(1, q.life * 2) });
+  }
+
   function gen() {
     const grid = [];
     for (let y = 0; y < ROWS; y++) {
@@ -49,7 +103,7 @@
   function start() {
     S = DB.load();
     M = { grid: gen(), x: 4, y: SURF - 1, px: 4, py: SURF - 1, bag: [], dig: null, move: 0, parts: [], camY: 0, face: 1, t: 0, sold: 0 };
-    A.play(); A.run(step); hud();
+    A.play(); V.init(); A.run(step); hud();
   }
   A.onAgain = start;
   const cap = () => BAG[S.upg.bag], power = () => PICK[S.upg.pick];
@@ -104,6 +158,7 @@
 
   A.cv.addEventListener('pointerdown', (e) => {
     if (!M || A.paused || A.over || !L.isActive('s-mine')) return;
+    if (V.ready) { const p = V.pick(e, { z: 0.5 }); if (!p) return; const dx = Math.floor(p.x + COLS / 2) - M.x, dy = Math.floor(-p.y + 0.5) - M.y; if (Math.abs(dx) + Math.abs(dy) === 1) M.tap = { dx, dy, t: 0.6 }; return; }
     const v = A.view, r = A.cv.getBoundingClientRect();
     const wx = ((e.clientX - r.left) * v.d - M.ox) / M.z, wy = ((e.clientY - r.top) * v.d - M.oy) / M.z;
     const tx = Math.floor(wx / T), ty = Math.floor(wy / T), dx = tx - M.x, dy = ty - M.y;
@@ -111,6 +166,7 @@
   });
 
   function draw() {
+    if (V.ready) return draw3();
     const v = A.view, avail = v.h - v.top - v.bottom;
     const z = Math.min(v.w / (COLS * T), avail / (8.5 * T)); M.z = z;
     const vwH = avail / z;
