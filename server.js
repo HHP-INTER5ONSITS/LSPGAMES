@@ -366,7 +366,8 @@ function lspWhy(e) {
   const tail = ' You were not charged.';
   if (e.why === 'keys') return "LSP-Pay doesn't accept LSPGames' API key. This happens when LSP-Pay's data was reset. The site owner must create a new API key in LSP-Pay (Business, then Developers) and put it in LSP_PAY_KEY_ID and LSP_PAY_SECRET on Render." + tail;
   if (e.why === 'down') return "LSP-Pay didn't answer. It may be waking up, which takes up to a minute. Wait a moment and try again." + tail;
-  if (e.why === 'busy') return 'LSP-Pay is busy right now. Try again in a minute.' + tail;
+  if (e.why === 'busy') return 'LSP-Pay says LSPGames is sending too many requests. Try again in a minute.' + tail;
+  if (e.why === 'hostbusy') return "Render (the host LSP-Pay runs on) turned the payment away with 'too many requests', before it reached LSP-Pay. LSP-Pay is probably restarting or asleep. Open lsp-pay.onrender.com, wait until it loads, then try again." + tail;
   if (e.why === 'other') return 'LSP-Pay refused the payment' + (e.said ? ': ' + e.said : '.') + tail;
   return "Couldn't reach LSP-Pay. Try again soon." + tail;
 }
@@ -378,8 +379,10 @@ app.get('/api/pay/check', async (req, res) => {
   if (!LSP.key || !LSP.secret) return res.json({ ...out, ok: false, verdict: 'Set LSP_PAY_KEY_ID and LSP_PAY_SECRET on Render.' });
   try {
     const r = await fetch(LSP.url + '/api/v1/summary', { headers: { Authorization: lspAuth() }, signal: AbortSignal.timeout(60000) });
-    const body = await r.json().catch(() => ({}));
-    out.status = r.status;
+    const txt = await r.text().catch(() => ''); let body = {}; try { body = JSON.parse(txt); } catch (_) {}
+    out.status = r.status; out.server = r.headers.get('server') || null; out.contentType = r.headers.get('content-type') || null;
+    if (!r.ok) out.bodyStart = txt.slice(0, 200).replace(/\s+/g, ' ');
+    if (r.status === 429) return res.json({ ...out, ok: false, verdict: body.error ? 'LSP-Pay itself is rate limiting this API key: ' + body.error : "Something in front of LSP-Pay (Render's proxy) answered 429 Too Many Requests. LSP-Pay never saw the request. Open lsp-pay.onrender.com to wake it, and check LSP-Pay's Render logs and events." });
     if (r.ok) return res.json({ ...out, ok: true, verdict: 'LSP-Pay accepts the API key. Payments should work.' });
     if (r.status === 401 || r.status === 403) return res.json({ ...out, ok: false, verdict: 'LSP-Pay rejects the API key (it was probably wiped when LSP-Pay\'s database reset). Create a new API key in LSP-Pay and update LSP_PAY_KEY_ID and LSP_PAY_SECRET.', said: body.error || null });
     return res.json({ ...out, ok: false, verdict: 'LSP-Pay answered with an error.', said: body.error || null });
@@ -429,7 +432,8 @@ app.post('/api/pay/create', auth, async (req, res) => {
             headers: { Authorization: lspAuth(), 'Content-Type': 'application/json', 'Idempotency-Key': orderId },
             body: payload,
           });
-          data = await r.json().catch(() => ({}));
+          const txt = await r.text().catch(() => ''); r.bodyText = txt;
+          try { data = JSON.parse(txt); } catch (_) { data = {}; }
           if (r.status === 429) {
             // LSP-Pay asked us to slow down: wait as long as it says (max 15s), then try again.
             const wait = Math.min(15, Math.max(2, Number(r.headers.get('retry-after')) || 5));
@@ -444,7 +448,9 @@ app.post('/api/pay/create', auth, async (req, res) => {
         if (attempt < 3) await new Promise((ok) => setTimeout(ok, 3000));
       }
       if (!r) throw Object.assign(new Error('no answer: ' + lastErr), { why: 'down' });
-      if (r.status === 429) { lspCooldownUntil = Date.now() + 30000; throw Object.assign(new Error('LSP-Pay said 429: still rate limited after 3 tries.'), { why: 'busy' }); }
+      if (r.status === 429) { lspCooldownUntil = Date.now() + 30000; const host = !data.error; // LSP-Pay itself always answers in JSON with an "error"
+        console.error(`LSP-Pay 429 came from ${host ? 'the host in front of LSP-Pay (not LSP-Pay itself)' : 'LSP-Pay'}: server=${r.headers.get('server') || '?'} type=${r.headers.get('content-type') || '?'} body=${String(r.bodyText || '').slice(0, 300).replace(/\s+/g, ' ')}`);
+        throw Object.assign(new Error('LSP-Pay said 429: still rate limited after 3 tries.'), { why: host ? 'hostbusy' : 'busy' }); }
       if (r.status === 401 || r.status === 403) throw Object.assign(new Error(`LSP-Pay said ${r.status}: LSP_PAY_KEY_ID or LSP_PAY_SECRET is wrong. ${JSON.stringify(data).slice(0, 200)}`), { why: 'keys' });
       if (!r.ok || !data.id || !/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:/])/.test(data.checkoutUrl || '') || Number(data.amount) !== rupees) throw Object.assign(new Error('LSP-Pay said ' + r.status + ' ' + JSON.stringify(data).slice(0, 300)), { why: 'other', said: String(data.error || data.message || '').slice(0, 160) });
       await db.setOrder(orderId, { gatewayOrderId: data.id });
