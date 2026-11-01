@@ -21,6 +21,7 @@ async function mongoStore() {
   const db = client.db(process.env.MONGODB_DB || 'lspgames');
   const users = db.collection('users'), sessions = db.collection('sessions'), orders = db.collection('orders');
   await users.createIndex({ email: 1 }, { unique: true });
+  await users.createIndex({ uname: 1 }, { unique: true, sparse: true });
   await sessions.createIndex({ token: 1 }, { unique: true });
   await sessions.createIndex({ exp: 1 }, { expireAfterSeconds: 0 });
   await orders.createIndex({ orderId: 1 }, { unique: true });
@@ -34,6 +35,9 @@ async function mongoStore() {
     },
     getUser: (email) => users.findOne({ email }),
     setUserFields: (email, f) => users.updateOne({ email }, { $set: f }),
+    findByUname: (uname) => users.findOne({ uname }),
+    searchUnames: (prefix, n) => users.find({ uname: { $regex: '^' + prefix.replace(/[^a-z0-9_]/g, '') } }).limit(n).toArray(),
+    updateLists: (email, ops) => users.updateOne({ email }, ops),
     createSession: (token, email, dob, exp) => sessions.insertOne({ token, email, dob, exp: new Date(exp) }),
     async getSession(token) { const s = await sessions.findOne({ token }); return s && s.exp > new Date() ? s : null; },
     deleteSession: (token) => sessions.deleteOne({ token }),
@@ -91,6 +95,14 @@ function fileStore() {
     },
     async getUser(email) { return clone(data.users[email]); },
     async setUserFields(email, f) { if (data.users[email]) { Object.assign(data.users[email], f); persist(); } },
+    async findByUname(uname) { return clone(Object.values(data.users).find((u) => u.uname === uname)); },
+    async searchUnames(prefix, n) { return clone(Object.values(data.users).filter((u) => u.uname && u.uname.startsWith(prefix)).slice(0, n)); },
+    async updateLists(email, ops) { // supports $addToSet and $pull of single values, like MongoDB
+      const u = data.users[email]; if (!u) return;
+      for (const [k, v] of Object.entries(ops.$addToSet || {})) { u[k] = u[k] || []; if (!u[k].includes(v)) u[k].push(v); }
+      for (const [k, v] of Object.entries(ops.$pull || {})) { u[k] = (u[k] || []).filter((x) => x !== v); }
+      persist();
+    },
     async createSession(token, email, dob, exp) { data.sessions[token] = { token, email, dob, exp }; persist(); },
     async getSession(token) { const s = data.sessions[token]; return s && s.exp > Date.now() ? clone(s) : null; },
     async deleteSession(token) { delete data.sessions[token]; persist(); },

@@ -182,7 +182,7 @@ app.get('/api/username-free', async (req, res) => {
   if (!allow(ipLog, 'uf:' + req.ip, 120, 60 * 1000)) return res.status(429).json({ error: 'Slow down.' });
   const u = String(req.query.u || '').trim(), problem = nameProblem(u);
   if (problem) return res.json({ free: false, error: problem });
-  const taken = await db.getUser(idOfName(u));
+  const taken = (await db.getUser(idOfName(u))) || (await db.findByUname(u.toLowerCase()));
   res.json({ free: !taken, error: taken ? 'That username is taken. Try another one.' : '' });
 });
 app.post('/api/signup', async (req, res) => {
@@ -192,9 +192,9 @@ app.post('/api/signup', async (req, res) => {
   const pp = passProblem(p, u); if (pp) return res.status(400).json({ error: pp });
   if (!allow(ipLog, 'signup:' + req.ip, 10, 3600 * 1000)) return res.status(429).json({ error: 'Too many new accounts from here. Try again in an hour.' });
   const id = idOfName(u);
-  if (await db.getUser(id)) return res.status(409).json({ error: 'That username is taken. Try another one.' });
+  if ((await db.getUser(id)) || (await db.findByUname(u.toLowerCase()))) return res.status(409).json({ error: 'That username is taken. Try another one.' });
   const user = await db.upsertUser(id, dob.dob);
-  await db.setUserFields(id, { username: u, pass: hashPass(p) });
+  await db.setUserFields(id, { username: u, uname: u.toLowerCase(), pass: hashPass(p) });
   const token = await startSession(id, dob.dob);
   res.json({ token, email: id, username: u, dob: dob.dob, points: user.points, migrated: true });
 });
@@ -650,15 +650,18 @@ if (GATEWAY_MODE === 'demo') {
 
 setInterval(() => { const now = Date.now(); for (const [k, v] of otps) if (now > v.exp) otps.delete(k); }, 10 * 60 * 1000).unref();
 
+const FR = require('./friends')(app, { getDb: () => db, auth, allow, ipLog, nameProblem, idOfName });
+
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: 'Server error. Try again.' }); });
 
 DBM.connect().then((store) => {
   db = store;
-  app.listen(PORT, '0.0.0.0', () => {
+  const httpServer = app.listen(PORT, '0.0.0.0', () => {
     console.log(`LSPGames running on port ${PORT}`);
     console.log(`Email provider: ${provider() || (DEMO_MODE ? 'none (demo mode: codes shown on screen)' : 'NONE CONFIGURED')}`);
     if (!DEMO_MODE && process.env.DEMO_MODE) console.warn(`DEMO_MODE is "${process.env.DEMO_MODE}", which is not on. Use true to show sign-in codes on screen.`);
     if (DEMO_MODE) console.warn('DEMO MODE ON: sign-in codes are shown on the page, so anyone can sign in as any email. Set DEMO_MODE=false before real players use LSPGames.');
     console.log(`Storage: ${db.kind}. Payments: ${GATEWAY_MODE === 'lsppay' ? `LSP-Pay (${LSP.url}), key ${LSP.key || 'MISSING'}, webhook secret ${LSP.hook ? 'set' : 'MISSING (polling only)'}` : GATEWAY_MODE === 'demo' ? 'DEMO mode (no real money)' : GATEWAY_MODE === 'live' ? 'LIVE via ' + (process.env.GATEWAY_CREATE_URL || 'MISSING GATEWAY_CREATE_URL') : 'OFF'}`);
   });
+  FR.attach(httpServer);
 }).catch((e) => { console.error('Database connection failed:', e.message); process.exit(1); });

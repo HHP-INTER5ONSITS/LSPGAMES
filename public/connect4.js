@@ -69,13 +69,48 @@
     V.frame();
   }
 
+  /* ---------- playing a friend: your discs are always red on your screen ---------- */
+  const ON = { room: null, them: null, iStarted: false, wait: false };
+  const FRIEND = { id: -1, name: 'Friend', reward: 30, depth: 0, noise: 0 };
+  function startOnline(meFirst) { ON.iStarted = meFirst; start(-1); G.turn = meFirst ? 1 : 2; hud(); }
+  window.C4Online = {
+    start(room, friend) {
+      if (!window.Social) return;
+      ON.room = room; ON.them = friend || null; ON.wait = true;
+      const host = room.split(':')[1], iHost = host === (Social.me() || '').toLowerCase();
+      Social.presence('c4'); Social.join(room);
+      S = DB.load(); start(-1); G.turn = 0; A.paused = false;
+      A.modal(`<h2>${iHost ? 'Waiting for your friend' : 'Joining…'}</h2><p class="muted">${iHost ? `We sent ${ON.them || 'your friend'} an invite. The game starts when they join.` : 'Connecting to the game…'}</p><div class="modal-actions"><button class="btn ghost" data-a="x">Cancel</button></div>`, { x: () => { leaveOnline(); A.openLobby(); } });
+      ON.iHost = iHost;
+    },
+  };
+  function leaveOnline() { if (ON.room && window.Social) { Social.leave(); Social.presence(null); } ON.room = null; ON.wait = false; }
+  if (window.Social) {
+    Social.on('joined', (m) => {
+      if (!ON.room || m.room !== ON.room) return;
+      if (!m.ok) { toast(m.error || "Couldn't join that game."); leaveOnline(); A.openLobby(); return; }
+      const other = (m.members || []).find((x) => x.toLowerCase() !== (Social.me() || '').toLowerCase());
+      if (other) { ON.them = other; ON.wait = false; A.closeModal(); startOnline(ON.iHost); Social.state({ k: 'c4hi' }); }
+    });
+    Social.on('hello', (m) => { if (!ON.room || m.room !== ON.room || !ON.wait) return; ON.them = m.who; ON.wait = false; A.closeModal(); startOnline(ON.iHost); });
+    Social.on('state', (m) => {
+      const d = m.d; if (!ON.room || !d || m.who === Social.me() || !G) return;
+      if (d.k === 'c4hi' && ON.wait) { ON.them = m.who; ON.wait = false; A.closeModal(); startOnline(ON.iHost); }
+      if (d.k === 'c4move' && G.turn === 2 && !G.win && Number.isInteger(d.col) && d.col >= 0 && d.col < COLS) drop(d.col, 2);
+      if (d.k === 'c4new') { A.closeModal(); startOnline(!ON.iStarted); }
+    });
+    Social.on('left', (m) => { if (!ON.room || m.who !== ON.them || !G) return; if (!G.win) { A.over = true; A.end(`${m.who} left`, null, 'Your friend left the game.', [['lobby', 'Back', 'primary', () => { leaveOnline(); A.openLobby(); }]]); } });
+  }
+  A.onLeave = leaveOnline; A.onQuit = leaveOnline;
+
   function start(lv) {
     S = DB.load();
-    G = { lv: LEVELS[lv], b: Array.from({ length: ROWS }, () => Array(COLS).fill(0)), turn: 1, hover: 3, drop: null, win: null, botT: 0, t: 0, moves: 0 };
+    if (lv !== -1 && ON.room) leaveOnline();
+    G = { lv: lv === -1 ? FRIEND : LEVELS[lv], b: Array.from({ length: ROWS }, () => Array(COLS).fill(0)), turn: 1, hover: 3, drop: null, win: null, botT: 0, t: 0, moves: 0 };
     A.play(); V.init(); A.run(step); hud();
   }
   A.onAgain = () => start(G.lv.id);
-  function hud() { $('#c4-turn').textContent = G.win ? (G.win.p === 1 ? 'You win!' : G.win.p === 2 ? 'Bot wins' : 'Draw') : G.turn === 1 ? '🔴 Your turn' : '🟡 Bot is thinking...'; $('#c4-lvl').textContent = `${G.lv.name} bot`; }
+  function hud() { $('#c4-turn').textContent = G.win ? (G.win.p === 1 ? 'You win!' : G.win.p === 2 ? 'Bot wins' : 'Draw') : G.turn === 1 ? '🔴 Your turn' : '🟡 Bot is thinking...'; $('#c4-lvl').textContent = ON.room ? `vs ${ON.them || 'friend'}` : `${G.lv.name} bot`; if (ON.room && !G.win) $('#c4-turn').textContent = G.turn === 1 ? '🔴 Your turn' : G.turn === 2 ? `🟡 ${ON.them || 'Friend'} is thinking…` : 'Waiting…'; }
   const rowFor = (b, c) => { for (let r = ROWS - 1; r >= 0; r--) if (!b[r][c]) return r; return -1; };
   function lineAt(b) {
     const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
@@ -104,6 +139,7 @@
   }
   function drop(c, p) { LSPG.sfx('click');
     if (G.drop || G.win) return; const r = rowFor(G.b, c); if (r < 0) return;
+    if (ON.room && p === 1) Social.state({ k: 'c4move', col: c });
     G.drop = { c, r, p, y: BY - SZ, vy: 0 };
   }
   function land() { LSPG.sfx('drop');
@@ -111,10 +147,17 @@
     const w = lineAt(G.b);
     if (w) { G.win = w; return finish(w.p); }
     if (G.b[0].every(Boolean)) { G.win = { p: 0, cells: [] }; return finish(0); }
-    G.turn = 3 - d.p; if (G.turn === 2) G.botT = 0.45; hud();
+    G.turn = 3 - d.p; if (G.turn === 2 && !ON.room) G.botT = 0.45; hud();
   }
   function finish(p) {
     hud(); let got = 0;
+    if (ON.room) {
+      if (p === 1) got = Wallet.add(G.lv.reward); else if (!p) got = Wallet.add(5);
+      save(); A.over = true;
+      setTimeout(() => A.end(p === 1 ? `You beat ${ON.them}! 🎉` : p === 2 ? `${ON.them} wins` : "It's a draw", got || null, p === 1 ? 'Nice game!' : p === 2 ? 'Ask for a rematch!' : 'The board filled up.',
+        [['again', 'Rematch', 'primary', () => { Social.state({ k: 'c4new' }); startOnline(!ON.iStarted); }], ['lobby', 'Leave', 'ghost', () => { leaveOnline(); A.openLobby(); }]]), 900);
+      return;
+    }
     if (p === 1) { got = Wallet.add(G.lv.reward); S.wins[G.lv.id]++; } else if (p === 2) S.losses++; else { got = Wallet.add(5); S.draws++; }
     save(); A.over = true;
     setTimeout(() => A.end(p === 1 ? 'You win! 🎉' : p === 2 ? 'The bot wins' : "It's a draw", got || null, p === 1 ? `You beat the ${G.lv.name.toLowerCase()} bot in ${Math.ceil(G.moves / 2)} moves.` : p === 2 ? 'Try blocking its three-in-a-rows.' : 'The board filled up. +5 points.',
@@ -132,7 +175,7 @@
     if (dt > 0) {
       G.t += dt;
       if (G.drop) { const d = G.drop, ty = BY + d.r * SZ; d.vy += 3200 * dt; d.y += d.vy * dt; if (d.y >= ty) { d.y = ty; if (d.vy > 400) d.vy *= -0.3; else land(); } }
-      else if (G.turn === 2 && !G.win) { G.botT -= dt; if (G.botT <= 0) { G.botT = 99; botMove(); } }
+      else if (G.turn === 2 && !G.win && !ON.room) { G.botT -= dt; if (G.botT <= 0) { G.botT = 99; botMove(); } }
     }
     draw();
   }

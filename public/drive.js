@@ -145,6 +145,13 @@
   .touch .d-race{top:calc(190px + env(safe-area-inset-top,0px))}
   .touch .d-prompt{bottom:calc(110px + env(safe-area-inset-bottom,0px))}
   .touch #s-drive .help{display:none}
+  .d-log{position:absolute;left:14px;bottom:calc(196px + env(safe-area-inset-bottom,0px));max-width:min(360px,60vw);display:grid;gap:4px;pointer-events:none;z-index:2}
+  .d-log div{background:rgba(22,32,61,.72);color:#fff;font-weight:700;font-size:14px;padding:5px 10px;border-radius:10px;width:max-content;max-width:100%}
+  .d-log b{color:#9fd3ff}
+  .touch .d-log{left:14px;top:calc(186px + env(safe-area-inset-top,0px));bottom:auto;max-width:42vw}
+  .d-say{position:absolute;left:50%;transform:translateX(-50%);top:calc(64px + env(safe-area-inset-top,0px));display:flex;gap:8px;width:min(480px,92vw);z-index:5}
+  .d-say input{flex:1;height:46px;border:2px solid var(--line);border-radius:12px;padding:0 12px;font:700 16px Nunito,system-ui,sans-serif}
+  .d-say[hidden]{display:none}
   .d-load{position:absolute;inset:0;display:grid;place-items:center;background:#9fd0f5;color:#16203d;font-family:Fredoka,system-ui,sans-serif;font-size:22px;font-weight:700;z-index:6}
   .d-load[hidden]{display:none}
   .vstats{display:grid;gap:4px;margin-top:2px}
@@ -186,11 +193,15 @@
       <span class="hudpill" id="d-earned">⭐ +0</span>
       <button class="iconbtn" id="d-cam" aria-label="Change camera" title="Camera (C)">📷</button>
       <button class="iconbtn" id="d-mute" aria-label="Sound on or off" title="Sound">🔊</button>
+      <button class="iconbtn" id="d-chat" aria-label="Chat with friends" title="Chat (Enter)" hidden>💬</button>
+      <span class="hudpill" id="d-mp" hidden></span>
     </div>
     <div class="d-obj" id="d-obj"></div>
     <div class="d-race" id="d-race"></div>
     <div class="d-prompt" id="d-prompt"></div>
     <div class="d-count" id="d-count"></div>
+    <div class="d-log" id="d-log"></div>
+    <form class="d-say" id="d-say" hidden><input id="d-say-in" maxlength="120" placeholder="Say something nice…" autocomplete="off"><button class="btn primary" type="submit">Send</button></form>
     <div class="d-pop" id="d-pop"></div>
     <canvas class="d-map" id="d-map" width="340" height="340"></canvas>
     <div class="d-speedo" id="d-speedo"><span class="gear" id="d-gear">N</span><span class="spd" id="d-spd">0</span><span class="unit">km/h</span>
@@ -1046,7 +1057,8 @@
     while (G.traffic.length < n) G.traffic.push(makeTraffic());
     G.earned = 0; G.on = true; G.cam = 'chase';
     respawn();
-    pop('Walk to your ride and get in');
+    pop(MP.want ? 'Joining your friend…' : 'Walk to your ride and get in');
+    mpBegin();
     resize();
     $('#d-mute').textContent = LSPG.muted && LSPG.muted() ? '🔇' : '🔊';
     cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(frame);
@@ -1058,6 +1070,7 @@
     if (G.race) endRace(true);
     for (const r of G.rivals) scene.remove(r.m.g); G.rivals = []; G.heat = 0;
     if (G.job) { scene.remove(G.job.mesh); G.job = null; }
+    mpEnd();
   }
   function togglePause() {
     if (!G.on || G.over) return;
@@ -1096,6 +1109,8 @@
   const K = {};
   addEventListener('keydown', (e) => {
     if (!LSPG.isActive('s-drive')) return;
+    if (e.target && e.target.id === 'd-say-in') { if (e.code === 'Escape') closeSay(); return; }
+    if ((e.code === 'Enter' || e.code === 'KeyT') && MP.room) { e.preventDefault(); openSay(); return; }
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
     if (e.repeat) return;
     if (e.code === 'Escape' || e.code === 'KeyP') { togglePause(); return; }
@@ -1310,6 +1325,7 @@
       engine.set(G.paused ? 0 : rpm, G.paused ? 0 : inp.thr ? 1 : 0.2);
       G.gear = fwdSpeed(P) < -0.5 ? 'R' : sp < 0.5 && !inp.thr ? 'N' : String(gear + 1);
     }
+    mpFrame(dt);
     G.hudT -= dt; if (G.hudT <= 0) { G.hudT = 0.1; hud(); }
     G.mapT -= dt; if (G.mapT <= 0) { G.mapT = 1 / 20; drawMini(); }
   }
@@ -1413,6 +1429,7 @@
     if (G.race) { const c = G.race.def.cps[P.ai.cp]; dot(c[0], c[1], '#3ad1ff', 11, true); for (const b of G.bots) dot(b.x, b.z, '#ff8a3d', 7, false); }
     for (const r of G.rivals) if (!r.dead) dot(r.x, r.z, '#e3263a', 8, true);
     if (G.mode === 'foot') dot(P.x, P.z, '#ffd23f', 8, true, '');
+    for (const r of MP.remotes.values()) dot(r.x, r.z, '#2f6bff', 9, true, r.name[0].toUpperCase());
     // player arrow
     g.save(); g.translate(W / 2, H / 2); g.rotate(rot - me.h);
     g.fillStyle = '#ffd23f'; g.strokeStyle = '#16203d'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, -16); g.lineTo(11, 12); g.lineTo(0, 6); g.lineTo(-11, 12); g.closePath(); g.fill(); g.stroke();
@@ -1450,7 +1467,88 @@
   });
   addEventListener('resize', () => { if (LSPG.isActive('s-hub')) drawHubArt(); });
   const card = $('#play-drive'); if (card) card.onclick = () => openLobby('play');
+  /* ================= playing with friends ================= */
+  const MP = { want: null, room: null, remotes: new Map(), sendT: 0, log: [] };
+  const hasSocial = () => window.Social && Social.me();
+  function mpBegin() {
+    if (!hasSocial()) return;
+    const guest = !!MP.want && MP.want !== 'drive:' + Social.me().toLowerCase();
+    MP.room = MP.want || 'drive:' + Social.me().toLowerCase(); MP.want = null;
+    if (guest) { const dx = -4.6 + Math.random() * 1.2, dz = (Math.random() - 0.5) * 6; P.x += dx; P.z += dz; F.x += dx; F.z += dz; camPos.init = false; } // park beside the host, not inside them
+    Social.presence('drive'); Social.join(MP.room);
+    $('#d-chat').hidden = false; $('#d-mp').hidden = false; mpHud();
+  }
+  function mpEnd() {
+    if (window.Social && MP.room) { Social.leave(); Social.presence(null); }
+    MP.room = null; for (const r of MP.remotes.values()) dropRemote(r); MP.remotes.clear(); $('#d-chat').hidden = true; $('#d-mp').hidden = true; $('#d-log').innerHTML = ''; closeSay();
+  }
+  function mpHud() { const n = MP.remotes.size, host = (MP.room || '').split(':')[1] || ''; $('#d-mp').textContent = n ? `👥 ${n + 1} in ${host === (Social.me() || '').toLowerCase() ? 'your city' : host + "'s city"}` : '👥 Invite friends from the Friends page'; }
+  function dropRemote(r) { if (r.car) scene.remove(r.car.g); if (r.foot) scene.remove(r.foot); if (r.tag) scene.remove(r.tag); if (r.say) scene.remove(r.say); }
+  function addLog(who, text) {
+    MP.log.push({ who, text, t: Date.now() }); MP.log = MP.log.slice(-5);
+    $('#d-log').innerHTML = MP.log.map((l) => `<div><b>${l.who.replace(/[<>&]/g, '')}:</b> ${l.text.replace(/[<>&]/g, '')}</div>`).join('');
+    clearTimeout(MP.logT); MP.logT = setTimeout(() => { MP.log = []; $('#d-log').innerHTML = ''; }, 12000);
+  }
+  function openSay() { if (!MP.room) return; $('#d-say').hidden = false; for (const k in K) K[k] = false; setTimeout(() => $('#d-say-in').focus(), 10); }
+  function closeSay() { const f = $('#d-say'); if (f) { f.hidden = true; $('#d-say-in').blur(); } }
+  $('#d-chat').onclick = () => ($('#d-say').hidden ? openSay() : closeSay());
+  $('#d-say').onsubmit = (e) => { e.preventDefault(); const t = $('#d-say-in').value.trim(); if (t) Social.chat(t); $('#d-say-in').value = ''; closeSay(); };
+  function remoteOf(name) {
+    let r = MP.remotes.get(name);
+    if (!r) { r = { name, x: 0, z: 0, y: 0, h: 0, tx: 0, tz: 0, ty: 0, th: 0, seen: 0, fresh: true }; MP.remotes.set(name, r); mpHud(); }
+    return r;
+  }
+  if (window.Social) {
+    Social.on('state', (m) => {
+      const d = m.d; if (!G.on || !MP.room || !d || d.k !== 'drive' || m.who === Social.me()) return;
+      const r = remoteOf(m.who); Object.assign(r, { tx: +d.x || 0, tz: +d.z || 0, ty: +d.y || 0, th: +d.h || 0, mode: d.m === 'foot' ? 'foot' : 'drive', v: specOf(d.v).id, c: /^#[0-9a-f]{6}$/i.test(d.c) ? d.c : '#888888', st: +d.st || 0, sp: +d.s || 0, pitch: +d.p || 0, seen: performance.now() });
+      if (r.fresh) { r.x = r.tx; r.z = r.tz; r.y = r.ty; r.h = r.th; r.fresh = false; }
+    });
+    Social.on('hello', (m) => { if (G.on && MP.room) { addLog('👋', `${m.who} joined your city`); LSPG.sfx && LSPG.sfx('pop'); } });
+    Social.on('left', (m) => { const r = MP.remotes.get(m.who); if (r) { dropRemote(r); MP.remotes.delete(m.who); mpHud(); } if (G.on) addLog('👋', `${m.who} left`); });
+    Social.on('chat', (m) => {
+      if (!G.on || !MP.room) return; addLog(m.who, m.text); LSPG.sfx && LSPG.sfx('click');
+      const r = m.who === Social.me() ? null : MP.remotes.get(m.who);
+      const target = r ? r : { me: true };
+      if (target.say) scene.remove(target.say);
+      const sp = textSprite(m.text.length > 34 ? m.text.slice(0, 33) + '…' : m.text, '#ffffff', '#16203d', Math.min(6, 0.8 + m.text.length * 0.14), 0.7, '700 40px Nunito, system-ui, sans-serif');
+      sp.userData.until = performance.now() + 6000; scene.add(sp);
+      if (r) r.say = sp; else { if (MP.mySay) scene.remove(MP.mySay); MP.mySay = sp; }
+    });
+    Social.on('joined', (m) => { if (!m.ok && G.on) { toast(m.error || "Couldn't join."); } });
+  }
+  function mpFrame(dt) {
+    if (!MP.room) return;
+    MP.sendT -= dt;
+    if (MP.sendT <= 0) {
+      MP.sendT = 0.1; const drive = G.mode === 'drive';
+      Social.state({ k: 'drive', m: G.mode, v: P.id, c: paintOf(P.id), x: +(drive ? P.x : F.x).toFixed(2), z: +(drive ? P.z : F.z).toFixed(2), y: +(drive ? P.y : F.y).toFixed(2), h: +(drive ? P.h : F.h).toFixed(3), st: +P.st.toFixed(2), s: +(drive ? fwdSpeed(P) : Math.hypot(F.vx, F.vz)).toFixed(1), p: +P.pitch.toFixed(2) });
+    }
+    const now = performance.now(), k = Math.min(1, dt * 10);
+    for (const [name, r] of MP.remotes) {
+      if (now - r.seen > 6000) { dropRemote(r); MP.remotes.delete(name); mpHud(); continue; }
+      r.x += (r.tx - r.x) * k; r.z += (r.tz - r.z) * k; r.y += (r.ty - r.y) * k; r.h += wrapA(r.th - r.h) * k;
+      const key = r.v + r.c;
+      if (r.mode === 'drive') {
+        if (!r.car || r.carKey !== key) { if (r.car) scene.remove(r.car.g); const sp = specOf(r.v); r.car = sp.type === 'bike' ? bikeModel(sp.body, r.c, { shirt: '#ff8a3d' }) : carModel(sp.body, r.c, { shirt: '#ff8a3d' }); scene.add(r.car.g); r.carKey = key; }
+        if (r.foot) r.foot.visible = false;
+        const g = r.car.g; g.visible = true; g.position.set(r.x, r.y, r.z); g.rotation.set(-r.pitch, r.h, specOf(r.v).type === 'bike' ? r.st * 0.4 * Math.min(1, Math.abs(r.sp) / 12) : 0);
+        for (const w of r.car.wheels) w.rotation.x += (r.sp / (r.car.wr || 0.34)) * dt; for (const p of r.car.steer) p.rotation.y = -r.st * 0.5;
+      } else {
+        if (r.car) r.car.g.visible = false;
+        if (!r.foot) { r.foot = person('#ff8a3d', '#2d3a5c', '#e0ac69'); scene.add(r.foot); }
+        r.foot.visible = true; r.foot.position.set(r.x, r.y, r.z); r.foot.rotation.y = r.h;
+        const sw = Math.sin(now / 120) * Math.min(1, r.sp / 3) * 0.7, u = r.foot.userData; u.legs[0].rotation.x = sw; u.legs[1].rotation.x = -sw; u.arms[0].rotation.x = -sw; u.arms[1].rotation.x = sw;
+      }
+      if (!r.tag) { r.tag = textSprite('👥 ' + name, 'rgba(47,107,255,.9)', '#ffffff', Math.min(3.2, 0.9 + name.length * 0.16), 0.55); scene.add(r.tag); }
+      const top = r.mode === 'drive' ? 2.6 : 2.6; r.tag.position.set(r.x, r.y + top, r.z);
+      if (r.say) { if (now > r.say.userData.until) { scene.remove(r.say); r.say = null; } else r.say.position.set(r.x, r.y + top + 1.1, r.z); }
+    }
+    if (MP.mySay) { const me = G.mode === 'drive' ? P : F; if (now > MP.mySay.userData.until) { scene.remove(MP.mySay); MP.mySay = null; } else MP.mySay.position.set(me.x, me.y + 3.4, me.z); }
+  }
+
   window.LSPDrive = { open: openLobby, _G: G, _P: () => P,
+    playWith(room) { load(); MP.want = room; if (G.on) { mpEnd(); mpBegin(); return; } startCity(); },
     // test hook: run the simulation without rendering. keys = {thr, steer, ...}
     _sim(n, keys) { const save = Object.assign({}, K); Object.assign(K, keys || {}); let t0 = performance.now(); for (let i = 0; i < n; i++) { physics(1 / 60); if (i % 4 === 0) logic(4 / 60); } const ms = performance.now() - t0; for (const k in K) delete K[k]; Object.assign(K, save); return ms / n; },
     _render() { const t0 = performance.now(); draw(1 / 60); return performance.now() - t0; } };
