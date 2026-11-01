@@ -94,6 +94,60 @@
   L.holdButtons('#s-obby', tin);
   let OS = null, G = null, raf = 0, last = 0, touchMode = false;
 
+  /* ---------- 3D obby: blocks, lava and spinning coins ---------- */
+  const OX = (x) => x / T, OY = (y) => ROWS - y / T;
+  const V = L.g3d({ key: 'obby', scr, cv, g, view: { d: 1 } }, { sky: ['#6fb2ee', '#d4ecfb'], fogNear: 30, fogFar: 90, shadowSize: 14 });
+  const D3 = {};
+  V.A.view = null; Object.defineProperty(V.A, 'view', { get: () => view });
+  V.onReady((V) => {
+    const Th = V.T, sc = V.scene;
+    D3.stage = new Th.Group(); sc.add(D3.stage);
+    D3.player = V.person('#2f6bff', '#2d3a5c', '#f1c27d'); D3.player.scale.setScalar(0.48);
+    D3.coin = V.pool(() => { const m = V.cyl(0.28, 0.28, 0.08, V.M('#ffb31a', { metalness: 0.7, roughness: 0.25, emissive: '#7a4a00', emissiveIntensity: 0.3 }), 0, 0, 0, sc, 20); m.rotation.x = Math.PI / 2; const w = new Th.Group(); sc.remove(m); w.add(m); sc.add(w); return w; });
+    D3.movers = V.pool((m) => V.box(OX(m.w), OX(m.h), 2.2, V.M('#5b6fd6', { metalness: 0.3, roughness: 0.4 }), 0, 0, 0));
+    V.camera.fov = 50; V.camera.updateProjectionMatrix(); V.follow = new Th.Vector3();
+  });
+  function build3() {
+    const Th = V.T, root = D3.stage, st = G.st, th = st.theme; while (root.children.length) root.remove(root.children[0]);
+    const geo = new Th.BoxGeometry(1, 1, 2.2), gm = V.M(th.ground, { roughness: 0.9 }), tm = V.M(th.top, { roughness: 0.8 });
+    const cells = { '#': [], L: [], '^': [], J: [] }; D3.dis = {};
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < st.cols; x++) { const c = st.grid[y][x]; if (cells[c]) cells[c].push([x, y]); else if (c === 'D') { const b = V.box(0.96, 0.96, 2.1, V.M('#b89cff', { transparent: true, opacity: 0.85, roughness: 0.2 }), x + 0.5, (ROWS - y) - 0.5, 0, root); D3.dis[y * st.cols + x] = b; } }
+    const m4 = new Th.Matrix4();
+    const inst = (list, g2, mat, f) => { if (!list.length) return; const im = new Th.InstancedMesh(g2, mat, list.length); list.forEach(([x, y], i) => { f(m4, x, y); im.setMatrixAt(i, m4); }); im.castShadow = im.receiveShadow = true; im.frustumCulled = false; root.add(im); return im; };
+    inst(cells['#'], geo, gm, (m, x, y) => m.makeTranslation(x + 0.5, (ROWS - y) - 0.5, 0));
+    inst(cells['#'].filter(([x, y]) => !solid(x, y - 1) || tileAt(x, y - 1) === 'D'), new Th.BoxGeometry(1.02, 0.22, 2.24), tm, (m, x, y) => m.makeTranslation(x + 0.5, (ROWS - y) - 0.1, 0));
+    inst(cells.L, new Th.BoxGeometry(1, 0.75, 2.2), V.M('#ff5a36', { emissive: '#ff3a10', emissiveIntensity: 0.9, roughness: 0.5 }), (m, x, y) => m.makeTranslation(x + 0.5, (ROWS - y) - 0.62, 0));
+    inst(cells['^'], new Th.ConeGeometry(0.18, 0.5, 6), V.M('#c3cad8', { metalness: 0.8, roughness: 0.25 }), (m, x, y) => m.makeTranslation(x + 0.5, (ROWS - y) - 0.75, 0));
+    inst(cells['^'], new Th.ConeGeometry(0.18, 0.5, 6), V.M('#c3cad8', { metalness: 0.8, roughness: 0.25 }), (m, x, y) => m.makeTranslation(x + 0.5, (ROWS - y) - 0.75, 0.6));
+    inst(cells['^'], new Th.ConeGeometry(0.18, 0.5, 6), V.M('#c3cad8', { metalness: 0.8, roughness: 0.25 }), (m, x, y) => m.makeTranslation(x + 0.5, (ROWS - y) - 0.75, -0.6));
+    inst(cells.J, new Th.BoxGeometry(0.9, 0.25, 1.8), V.M('#ffb31a', { emissive: '#ff9f1c', emissiveIntensity: 0.4 }), (m, x, y) => m.makeTranslation(x + 0.5, (ROWS - y) - 0.15, 0));
+    inst(cells.J, geo, gm, (m, x, y) => { m.makeScale(1, 0.72, 1); m.setPosition(x + 0.5, (ROWS - y) - 0.64, 0); });
+    // ground under the course, checkpoints, finish, scenery
+    V.box(st.cols + 60, 0.4, 30, V.M(th.top, { roughness: 1 }), st.cols / 2, -0.2, -17.5, root);
+    for (const c of st.checks) { V.cyl(0.06, 0.06, 2.4, '#8a93ab', OX(c.x) + 0.5, OY(c.y) + 0.2, -0.6, root, 6); const fl = V.box(0.9, 0.5, 0.04, '#c9cfdb', OX(c.x) + 0.97, OY(c.y) + 1.1, -0.6, root); c.mesh = fl; }
+    if (st.finish) { const f = st.finish, fx = OX(f.x) + 0.5; for (const z of [-1.1, 1.1]) V.cyl(0.08, 0.08, 3, '#3c435a', fx, OY(f.y) + 0.5, z, root, 8); const ck = V.tex(64, 32, (c) => { for (let i = 0; i < 8; i++) for (let j = 0; j < 4; j++) { c.fillStyle = (i + j) % 2 ? '#16203d' : '#fff'; c.fillRect(i * 8, j * 8, 8, 8); } }); V.box(0.1, 0.7, 2.3, new Th.MeshStandardMaterial({ map: ck }), fx, OY(f.y) + 1.7, 0, root); }
+    for (let i = 0; i < st.cols / 4; i++) root.add(V.tree(i * 4 + Math.random() * 2, -6 - Math.random() * 10, 0.9 + Math.random() * 0.8, -1.4));
+    D3.built = st;
+    V.scene.remove(D3.player); D3.player = V.person(G.color, '#2d3a5c', '#f1c27d');
+  }
+  function draw3() {
+    if (D3.built !== G.st) build3();
+    const p = G.p, Th = V.T, px = OX(p.x + PW / 2), py = OY(p.y + PH);
+    const pl = D3.player; pl.visible = !(G.deadT > 0); pl.position.set(px, py, 0);
+    pl.rotation.y = p.face > 0 ? Math.PI / 2 : -Math.PI / 2; pl.scale.set(0.48 * (1 + p.squash * 0.5), 0.48 * (1 - p.squash * 0.5), 0.48);
+    V.walk(pl, G.t * 14, p.onGround && Math.abs(p.vx) > 20 ? 1 : 0); if (!p.onGround) { const u = pl.userData; u.arms[0].rotation.x = u.arms[1].rotation.x = -2.6; }
+    D3.coin.sync(G.st.coins.filter((c) => !c.taken), (m, c) => { m.position.set(OX(c.x), OY(c.y) + Math.sin(G.t * 3 + c.x) * 0.08, 0); m.rotation.y = G.t * 3 + c.x; });
+    D3.movers.sync(G.st.movers, (m, mv) => m.position.set(OX(mv.x) + OX(mv.w) / 2, OY(mv.y) - OX(mv.h) / 2, 0));
+    for (const k in D3.dis) { const d = G.dis[k], b = D3.dis[k]; b.visible = !(d && d.gone > 0); b.position.x = (k % G.st.cols) + 0.5 + (d && d.t > 0 ? (Math.random() - 0.5) * 0.08 : 0); b.material.opacity = d && d.t > 0 ? 0.5 : 0.85; }
+    for (const c of G.st.checks) if (c.mesh) c.mesh.material = V.M(c.on ? '#14c79a' : '#c9cfdb');
+    for (const q of G.parts) if (!q.shown && !q.text) { q.shown = true; V.puff(OX(q.x), OY(q.y), 0.8, q.color, 0.2, 0.5, (q.vx || 0) / T, -(q.vy || 0) / T, 0, 0, 1, 10); }
+    const cam = D3.cam || (D3.cam = new Th.Vector3(px + 2.5, py + 2, 11));
+    cam.lerp(new Th.Vector3(px + 2.5 + p.vx / T * 0.15, Math.max(2.5, py + 1.6), 11), 0.12);
+    V.camera.position.copy(cam); V.camera.lookAt(cam.x - 0.4, cam.y - 1.2, 0); V.follow.set(px, py, 0);
+    V.frame();
+    for (const q of G.parts) if (q.text) V.label(OX(q.x), OY(q.y), 0.5, q.text, { size: 20, color: q.color, stroke: '#fff', alpha: Math.max(0, Math.min(1, q.life / 0.6)) });
+  }
+
   function oload() {
     OS = Object.assign({ unlocked: 1, best: {}, owned: ['classic'], skin: 'classic' }, store.get('lsp_obby_' + profile.email, {}));
     OS.upg = Object.assign({ speed: 0, jump: 0 }, OS.upg || {});
@@ -145,7 +199,7 @@
     };
     touchMode = L.isTouch(); scr.classList.toggle('touch', touchMode);
     $('#ob-name').textContent = `Stage ${n}: ${st.theme.name}`;
-    L.closeModal('ob-modal'); show('s-obby'); fit();
+    L.closeModal('ob-modal'); show('s-obby'); fit(); V.init();
     G.cam.x = G.p.x; G.cam.y = G.p.y;
     cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(loop);
   }
@@ -322,6 +376,7 @@
   }
 
   function draw() {
+    if (V.ready) return draw3();
     const s = G.st, th = s.theme, z = view.z, p = G.p;
     const vw = view.w / z, vh = (view.h - (view.reserve || 0)) / z;
     const tx = Math.max(0, Math.min(s.w - vw, p.x + PW / 2 - vw * 0.4 + p.vx * 0.2));
