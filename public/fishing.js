@@ -34,10 +34,73 @@
   const g = A.g;
   let F = null, holding = false;
 
+  /* ---------- 3D lake ---------- */
+  const DZ = (x) => -(x - 175) * 0.045, LAT = (y) => (y - 450) * 0.06;
+  const V = L.g3d(A, { sky: ['#5ea4e8', '#bfe2fa', '#eaf6ff'], fogNear: 60, fogFar: 320, shadowSize: 12 });
+  const D3 = {};
+  V.onReady((V) => {
+    const T = V.T, sc = V.scene;
+    const wg = new T.PlaneGeometry(220, 220, 70, 70); wg.rotateX(-Math.PI / 2); D3.wg = wg; D3.w0 = Float32Array.from(wg.attributes.position.array);
+    const water = new T.Mesh(wg, new T.MeshStandardMaterial({ color: '#2f8fd0', roughness: 0.12, metalness: 0.25, transparent: true, opacity: 0.82 })); water.position.z = -60; water.receiveShadow = true; sc.add(water);
+    V.ground(240, 240, '#c9b78a', -3.2).position.z = -60;
+    // shore, hills, trees
+    V.box(40, 1.2, 14, '#6ea85a', 0, -0.3, 8); for (let i = 0; i < 24; i++) V.tree(-18 + i * 1.6 + Math.random(), 4 + Math.random() * 8, 0.8 + Math.random() * 0.6, 0.3);
+    for (let i = 0; i < 14; i++) { const h = 20 + Math.random() * 30, c = new T.Mesh(new T.ConeGeometry(25 + Math.random() * 20, h, 7), V.M('#6d8f7a', { flatShading: true })); c.position.set(-120 + i * 18, h / 2 - 3, -150 - Math.random() * 20); sc.add(c); }
+    // dock
+    for (let k = 0; k < 9; k++) V.box(2.6, 0.12, 0.5, '#a07e5a', 0, 0.7, 2 - k * 0.55);
+    for (const [x, z] of [[-1.2, 1.8], [1.2, 1.8], [-1.2, -2.4], [1.2, -2.4]]) V.box(0.22, 3, 0.22, '#7a5a3a', x, -0.8, z);
+    V.box(0.6, 0.5, 0.6, '#3c6fa8', 0.9, 1.0, 1.3); // bucket
+    const boat = V.box(1.4, 0.5, 3.4, '#d23a3a', 6, 0.05, -10); boat.rotation.y = 0.4;
+    // fisher with a rod
+    D3.p = V.person('#ff8a3d', '#2b3350', '#f1c27d', '#ffd640'); D3.p.position.set(0, 0.76, -1.8); D3.p.rotation.y = Math.PI;
+    D3.p.userData.arms.forEach((a) => (a.rotation.x = -0.9));
+    D3.rod = new T.Group(); D3.rod.position.set(0.2, 1.3, -2.2); sc.add(D3.rod);
+    const rod = V.cyl(0.02, 0.05, 3.2, '#6f5238', 0, 1.6, 0, D3.rod, 6); D3.rodMesh = rod;
+    D3.tip = new T.Vector3();
+    D3.line = new T.Line(new T.BufferGeometry().setFromPoints(Array.from({ length: 20 }, () => new T.Vector3())), new T.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8 })); D3.line.frustumCulled = false; sc.add(D3.line);
+    D3.bob = new T.Group(); V.ball(0.15, '#ff4d5e', 0, 0.06, 0, D3.bob, 12); V.ball(0.15, '#ffffff', 0, -0.06, 0, D3.bob, 12); sc.add(D3.bob);
+    // fish shadows under the water
+    const fs = new T.Shape(); fs.ellipse(0, 0, 0.9, 0.35, 0, Math.PI * 2); fs.moveTo(-0.8, 0); fs.lineTo(-1.4, 0.4); fs.lineTo(-1.4, -0.4); fs.lineTo(-0.8, 0);
+    const fg = new T.ShapeGeometry(fs); fg.rotateX(-Math.PI / 2);
+    D3.shadows = F0().shadows.map(() => { const m = new T.Mesh(fg, new T.MeshBasicMaterial({ color: '#0e3a5c', transparent: true, opacity: 0.45 })); sc.add(m); return m; });
+    V.camera.fov = 52; V.camera.position.set(2.6, 3.6, 4.2); V.camera.lookAt(-0.5, 0.5, -16); V.camera.updateProjectionMatrix(); V.follow = new T.Vector3(0, 0, -6);
+    V.sun.position.set(-20, 30, -10);
+  });
+  const F0 = () => F || { shadows: Array.from({ length: 6 }, () => ({})) };
+  function draw3() {
+    const T = V.T, t = F.t;
+    // waves
+    const p = D3.wg.attributes.position, a = p.array, b0 = D3.w0;
+    for (let i = 0; i < p.count; i++) { const x = b0[i * 3], z = b0[i * 3 + 2]; a[i * 3 + 1] = Math.sin(x * 0.35 + t * 1.6) * 0.07 + Math.cos(z * 0.3 + t * 1.2) * 0.07; }
+    p.needsUpdate = true; if ((F.t * 10 | 0) % 3 === 0) D3.wg.computeVertexNormals();
+    // fish shadows
+    F.shadows.forEach((s, i) => { const m = D3.shadows[i]; if (!m) return; m.position.set(LAT(s.y) * 0.6, -0.9, DZ(s.x)); m.rotation.y = s.v > 0 ? -Math.PI / 2 : Math.PI / 2; m.scale.setScalar(s.s || 1); });
+    // rod: pulled back while charging, bent while reeling
+    const pull = F.state === 'charge' ? F.power * 0.9 : 0, bend = F.state === 'reel' ? 0.35 + Math.sin(t * 20) * 0.05 : 0;
+    D3.rod.rotation.x = -0.9 + pull - bend; D3.rod.updateMatrixWorld(); D3.tip.set(0, 3.2, 0); D3.rodMesh.parent.localToWorld(D3.tip);
+    D3.p.userData.arms.forEach((ar) => (ar.rotation.x = -0.9 - pull * 0.6));
+    const pts = D3.line.geometry.attributes.position;
+    if (F.bob) {
+      const dip = F.state === 'bite' ? 0.25 + Math.sin(t * 40) * 0.1 : F.state === 'wait' ? Math.sin(t * 3) * 0.05 : 0;
+      const bx = 0.6, bz = DZ(F.bob.x), by = F.state === 'cast' ? (WATER + 14 - F.bob.y) * 0.03 : 0.05 - dip;
+      D3.bob.visible = true; D3.bob.position.set(bx, by, bz); D3.line.visible = true;
+      for (let k = 0; k < 20; k++) { const u = k / 19, sag = F.state === 'reel' ? 0 : Math.sin(u * Math.PI) * 0.8; pts.setXYZ(k, D3.tip.x + (bx - D3.tip.x) * u, D3.tip.y + (by - D3.tip.y) * u - sag, D3.tip.z + (bz - D3.tip.z) * u); }
+      if (F.state === 'bite' && Math.random() < 0.3) V.puff(bx, 0.1, bz, '#e6f4ff', 0.3, 0.4, (Math.random() - 0.5) * 2, 1.5, (Math.random() - 0.5) * 2, 0.5, 0.9, 6);
+    } else if (F.state === 'reel') {
+      const bz = -14 - (1 - F.meter) * 6; D3.bob.visible = false; D3.line.visible = true;
+      for (let k = 0; k < 20; k++) { const u = k / 19; pts.setXYZ(k, D3.tip.x + (0.6 + Math.sin(t * 3) * 2 - D3.tip.x) * u, D3.tip.y * (1 - u), D3.tip.z + (bz - D3.tip.z) * u); }
+      if (Math.random() < 0.15) V.puff(0.6 + Math.sin(t * 3) * 2, 0.1, bz, '#e6f4ff', 0.4, 0.5, 0, 2, 0, 0.6, 0.9, 6);
+    } else { D3.bob.visible = false; D3.line.visible = false; }
+    pts.needsUpdate = true;
+    for (const q of F.splash) if (!q.shown) { q.shown = true; V.puff(F.bob ? 0.6 : 0.3, 0.2, F.bob ? DZ(F.bob.x) : -3, '#e6f4ff', 0.25, 0.5, q.vx * 0.02, -q.vy * 0.02, 0, 0.3, 1, 8); }
+    V.frame();
+    const v = A.view; g.setTransform(v.s, 0, 0, v.s, v.ox, v.oy); drawUI(); g.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
   function start() {
     S = DB.load();
     F = { state: 'idle', power: 0, pdir: 1, bob: null, waitT: 0, biteT: 0, fish: null, zone: 200, zv: 0, fy: 200, ftarget: 200, fT: 0, meter: 0.3, caught: 0, earned: 0, t: 0, msg: 'Hold to cast', msgT: 99, splash: [], shadows: Array.from({ length: 6 }, () => ({ x: 300 + Math.random() * 650, y: WATER + 60 + Math.random() * 220, v: (Math.random() < 0.5 ? -1 : 1) * (20 + Math.random() * 30), s: 0.6 + Math.random() * 0.8 })) };
-    A.play(); A.run(step); hud();
+    A.play(); V.init(); A.run(step); hud();
   }
   A.onAgain = start;
   function hud() { $('#fs-caught').textContent = `🐟 ${F.caught} caught`; $('#fs-earn').textContent = `⭐ +${F.earned}`; }
@@ -103,6 +166,7 @@
   }
 
   function draw() {
+    if (V.ready) return draw3();
     A.begin();
     const gr = g.createLinearGradient(0, 0, 0, WATER); gr.addColorStop(0, '#bfe3ff'); gr.addColorStop(1, '#eaf6ff'); g.fillStyle = gr; g.fillRect(0, 0, W, WATER);
     g.fillStyle = '#fff3b0'; g.beginPath(); g.arc(860, 80, 40, 0, 7); g.fill();
@@ -126,6 +190,9 @@
     }
     for (const p of F.splash) { g.globalAlpha = Math.max(0, p.life * 2); g.fillStyle = '#e6f4ff'; g.beginPath(); g.arc(p.x, p.y, 4, 0, 7); g.fill(); }
     g.globalAlpha = 1;
+    drawUI();
+  }
+  function drawUI() {
     if (F.state === 'charge') { g.fillStyle = 'rgba(255,255,255,.9)'; rr(g, 60, 120, 180, 22, 11); g.fill(); g.fillStyle = F.power > 0.75 ? '#14c79a' : '#ffb31a'; rr(g, 64, 124, 172 * F.power, 14, 7); g.fill(); g.fillStyle = '#16203d'; g.font = '800 14px Nunito, system-ui, sans-serif'; g.textAlign = 'center'; g.fillText('Let go to cast! Farther casts find rarer fish', 150, 110); }
     if (F.state === 'reel') {
       const bx = 850, by = 90, bar = 430, zh = 90 + S.upg.rod * 16, f = F.fish;
@@ -144,7 +211,7 @@
       g.fillStyle = '#16203d'; g.font = '800 16px Nunito, system-ui, sans-serif'; g.fillText(`${s.f.kg} kg, +${s.f.val} points`, 500, 298); g.globalAlpha = 1;
     }
     if (F.msgT > 0 && F.state !== 'charge' && !F.show) { g.fillStyle = 'rgba(22,32,61,.8)'; g.font = '800 18px Nunito, system-ui, sans-serif'; const w = g.measureText(F.msg).width + 30; rr(g, 500 - w / 2, 540, w, 36, 18); g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.fillText(F.msg, 500, 564); }
-  }
+    }
 
   A.onTab = (t) => {
     S = DB.load(); const re = () => A.onTab(t);
