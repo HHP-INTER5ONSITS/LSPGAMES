@@ -361,6 +361,33 @@ const GATEWAY_NAME = process.env.GATEWAY_NAME || (GATEWAY_MODE === 'lsppay' ? 'L
 const sign = (buf) => crypto.createHmac('sha256', GATEWAY_SECRET).update(buf).digest('hex');
 const publicUrl = (req) => (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
 
+// Turn an LSP-Pay failure into a message that says what is actually wrong.
+function lspWhy(e) {
+  const tail = ' You were not charged.';
+  if (e.why === 'keys') return "LSP-Pay doesn't accept LSPGames' API key. This happens when LSP-Pay's data was reset. The site owner must create a new API key in LSP-Pay (Business, then Developers) and put it in LSP_PAY_KEY_ID and LSP_PAY_SECRET on Render." + tail;
+  if (e.why === 'down') return "LSP-Pay didn't answer. It may be waking up, which takes up to a minute. Wait a moment and try again." + tail;
+  if (e.why === 'busy') return 'LSP-Pay is busy right now. Try again in a minute.' + tail;
+  if (e.why === 'other') return 'LSP-Pay refused the payment' + (e.said ? ': ' + e.said : '.') + tail;
+  return "Couldn't reach LSP-Pay. Try again soon." + tail;
+}
+// Health check for the site owner: open /api/pay/check to see whether LSP-Pay works.
+app.get('/api/pay/check', async (req, res) => {
+  if (!allow(ipLog, 'pcheck:' + req.ip, 10, 60 * 1000)) return res.status(429).json({ error: 'Too many checks. Wait a minute.' });
+  const out = { mode: GATEWAY_MODE, lspPayUrl: LSP.url, keyIdSet: !!LSP.key, secretSet: !!LSP.secret, webhookSecretSet: !!LSP.hook };
+  if (GATEWAY_MODE !== 'lsppay') return res.json({ ...out, ok: false, verdict: 'GATEWAY_MODE is not lsppay, so LSP-Pay is not used.' });
+  if (!LSP.key || !LSP.secret) return res.json({ ...out, ok: false, verdict: 'Set LSP_PAY_KEY_ID and LSP_PAY_SECRET on Render.' });
+  try {
+    const r = await fetch(LSP.url + '/api/v1/summary', { headers: { Authorization: lspAuth() }, signal: AbortSignal.timeout(60000) });
+    const body = await r.json().catch(() => ({}));
+    out.status = r.status;
+    if (r.ok) return res.json({ ...out, ok: true, verdict: 'LSP-Pay accepts the API key. Payments should work.' });
+    if (r.status === 401 || r.status === 403) return res.json({ ...out, ok: false, verdict: 'LSP-Pay rejects the API key (it was probably wiped when LSP-Pay\'s database reset). Create a new API key in LSP-Pay and update LSP_PAY_KEY_ID and LSP_PAY_SECRET.', said: body.error || null });
+    return res.json({ ...out, ok: false, verdict: 'LSP-Pay answered with an error.', said: body.error || null });
+  } catch (e) {
+    return res.json({ ...out, ok: false, verdict: "Couldn't reach LSP-Pay at " + LSP.url + ' (' + (e.name === 'TimeoutError' ? 'timed out' : e.message) + '). Check LSP_PAY_URL and that LSP-Pay is running.' });
+  }
+});
+
 app.get('/api/store', (req, res) => res.json({ packs: PACKS, rate: RATE, minRs: MIN_RS, maxRs: MAX_RS, gateway: GATEWAY_NAME, demo: GATEWAY_MODE === 'demo' || GATEWAY_MODE === 'lsppay', newTab: GATEWAY_MODE === 'lsppay', walletPay: GATEWAY_MODE === 'lsppay', enabled: ['demo', 'live', 'lsppay'].includes(GATEWAY_MODE), max: DBM.POINTS_MAX }));
 
 app.post('/api/pay/create', auth, async (req, res) => {
@@ -416,10 +443,10 @@ app.post('/api/pay/create', auth, async (req, res) => {
         console.warn(`LSP-Pay attempt ${attempt} failed: ${lastErr}`);
         if (attempt < 3) await new Promise((ok) => setTimeout(ok, 3000));
       }
-      if (!r) throw new Error('no answer: ' + lastErr);
-      if (r.status === 429) { lspCooldownUntil = Date.now() + 30000; throw new Error('LSP-Pay said 429: still rate limited after 3 tries. LSP-Pay is limiting how many API requests LSPGames can make.'); }
-      if (r.status === 401 || r.status === 403) throw new Error(`LSP-Pay said ${r.status}: LSP_PAY_KEY_ID or LSP_PAY_SECRET is wrong. ${JSON.stringify(data).slice(0, 200)}`);
-      if (!r.ok || !data.id || !/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:/])/.test(data.checkoutUrl || '') || Number(data.amount) !== rupees) throw new Error('LSP-Pay said ' + r.status + ' ' + JSON.stringify(data).slice(0, 300));
+      if (!r) throw Object.assign(new Error('no answer: ' + lastErr), { why: 'down' });
+      if (r.status === 429) { lspCooldownUntil = Date.now() + 30000; throw Object.assign(new Error('LSP-Pay said 429: still rate limited after 3 tries.'), { why: 'busy' }); }
+      if (r.status === 401 || r.status === 403) throw Object.assign(new Error(`LSP-Pay said ${r.status}: LSP_PAY_KEY_ID or LSP_PAY_SECRET is wrong. ${JSON.stringify(data).slice(0, 200)}`), { why: 'keys' });
+      if (!r.ok || !data.id || !/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:/])/.test(data.checkoutUrl || '') || Number(data.amount) !== rupees) throw Object.assign(new Error('LSP-Pay said ' + r.status + ' ' + JSON.stringify(data).slice(0, 300)), { why: 'other', said: String(data.error || data.message || '').slice(0, 160) });
       await db.setOrder(orderId, { gatewayOrderId: data.id });
       // "Pay with LSP-Pay": open LSP-Pay checkout straight on the player's wallet.
       let paymentUrl = data.checkoutUrl;
@@ -428,7 +455,7 @@ app.post('/api/pay/create', auth, async (req, res) => {
     } catch (e) {
       console.error('LSP-Pay create failed:', e.message);
       await db.setOrder(orderId, { status: 'failed', failReason: 'gateway_error' });
-      return res.status(502).json({ error: "Couldn't reach LSP-Pay. You were not charged. Try again soon." });
+      return res.status(502).json({ error: lspWhy(e) });
     }
   }
 
