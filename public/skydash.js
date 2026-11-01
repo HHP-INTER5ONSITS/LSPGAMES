@@ -58,6 +58,59 @@
   const keys = {};
   const view = { z: 1, w: 0, h: 0 };
 
+  /* ---------- 3D sky ---------- */
+  const K = 1 / 40, SX = (x) => x * K, SY = (y) => (H / 2 - y) * K;
+  const V = L.g3d({ key: 'sky', scr, cv, g, view: { d: 1 } }, { sky: ['#3f86d6', '#a9d4f5', '#fff2df'], fogNear: 30, fogFar: 90, shadows: false });
+  Object.defineProperty(V.A, 'view', { get: () => ({ d: devicePixelRatio > 2 ? 2 : devicePixelRatio || 1 }) });
+  const D3 = {};
+  V.onReady((V) => {
+    const Th = V.T, sc = V.scene;
+    D3.rocket = new Th.Group(); sc.add(D3.rocket);
+    const body = V.cyl(0.32, 0.32, 1.3, '#2f6bff', 0, 0, 0, D3.rocket, 20); body.rotation.z = Math.PI / 2; D3.body = body;
+    const nose = new Th.Mesh(new Th.ConeGeometry(0.32, 0.6, 20), V.M('#ffffff', { metalness: 0.3 })); nose.rotation.z = -Math.PI / 2; nose.position.x = 0.95; D3.rocket.add(nose);
+    const win = V.ball(0.15, V.M('#bfe8ff', { metalness: 0.5, roughness: 0.1 }), 0.3, 0.12, 0.25, D3.rocket, 12);
+    for (const a of [0, 2.09, 4.19]) { const fin = V.box(0.45, 0.04, 0.4, '#3c435a', -0.55, Math.cos(a) * 0.35, Math.sin(a) * 0.35, D3.rocket); fin.rotation.x = a; }
+    D3.flame = new Th.Mesh(new Th.ConeGeometry(0.22, 0.8, 12), V.M('#ffb31a', { emissive: '#ff8a1a', emissiveIntensity: 2, transparent: true, opacity: 0.9 })); D3.flame.rotation.z = Math.PI / 2; D3.flame.position.x = -1.05; D3.rocket.add(D3.flame);
+    D3.shield = V.ball(0.95, V.M('#4fb6f0', { transparent: true, opacity: 0.18, emissive: '#4fb6f0', emissiveIntensity: 0.4 }), 0, 0, 0, D3.rocket, 20); D3.shield.castShadow = false;
+    // clouds: floor and ceiling, recycled as we fly
+    D3.clouds = [];
+    const cm = V.M('#ffffff', { roughness: 1, emissive: '#c9d6e8', emissiveIntensity: 0.55 });
+    for (let i = 0; i < 46; i++) { const top = i % 2 === 0, m = V.ball(1.4 + Math.random() * 1.2, cm, 0, 0, 0, sc, 10); m.castShadow = false; m.scale.y = 0.7; m.userData = { top, off: (i >> 1) * 2.4, z: (Math.random() - 0.5) * 3, dy: Math.random() * 0.6 }; D3.clouds.push(m); }
+    D3.far = []; for (let i = 0; i < 16; i++) { const m = V.ball(3 + Math.random() * 3, V.M('#ffffff', { transparent: true, opacity: 0.8, emissive: '#dfe8f3', emissiveIntensity: 0.6 }), 0, 0, 0, sc, 10); m.castShadow = false; m.scale.y = 0.45; m.userData = { off: i * 9, y: -2 + Math.random() * 12, z: -20 - Math.random() * 25 }; D3.far.push(m); }
+    const starShape = new Th.Shape(); for (let i = 0; i < 10; i++) { const a = (i * Math.PI) / 5 + Math.PI / 2, r = i % 2 ? 0.13 : 0.3; i ? starShape.lineTo(Math.cos(a) * r, Math.sin(a) * r) : starShape.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
+    const starGeo = new Th.ExtrudeGeometry(starShape, { depth: 0.08, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 1 }); starGeo.center();
+    const gold = V.M('#ffb31a', { metalness: 0.6, roughness: 0.25, emissive: '#7a4a00', emissiveIntensity: 0.4 });
+    D3.items = V.pool((it) => { if (it.type === 'star') { const m = new Th.Mesh(starGeo, gold); sc.add(m); return m; } const gr = new Th.Group(); const c = it.type === 'shield' ? '#4fb6f0' : '#ff4d8b'; V.ball(0.45, V.M(c, { transparent: true, opacity: 0.35, emissive: c, emissiveIntensity: 0.6 }), 0, 0, 0, gr, 16); const ic = V.sprite(it.type === 'shield' ? '🛡️' : '🧲', 0.6, 0.6); sc.remove(ic); gr.add(ic); sc.add(gr); return gr; });
+    D3.obs = V.pool((o) => {
+      const gr = new Th.Group();
+      if (o.type === 'zap') { for (const s2 of [-1, 1]) { const n = V.ball(0.28, V.M('#3c435a', { metalness: 0.7, roughness: 0.3 }), s2 * SX(o.len) / 2, 0, 0, gr, 14); V.ball(0.14, V.M('#ffd640', { emissive: '#ffd640', emissiveIntensity: 1.5 }), s2 * (SX(o.len) / 2 + 0.05), 0, 0.15, gr, 8); }
+        const beam = V.cyl(0.08, 0.08, SX(o.len), V.M('#fff27a', { emissive: '#ffd640', emissiveIntensity: 2.5, transparent: true, opacity: 0.9 }), 0, 0, 0, gr, 8); beam.rotation.z = Math.PI / 2; const glow = V.cyl(0.22, 0.22, SX(o.len), V.M('#ffd640', { transparent: true, opacity: 0.25, emissive: '#ffd640', emissiveIntensity: 1 }), 0, 0, 0, gr, 8); glow.rotation.z = Math.PI / 2; }
+      else { const b = V.ball(0.38, '#ff8a3d', 0, 0, 0, gr, 14); V.ball(0.1, '#ffffff', -0.25, 0.12, 0.25, gr, 8); V.ball(0.05, '#16203d', -0.31, 0.12, 0.31, gr, 6); const beak = new Th.Mesh(new Th.ConeGeometry(0.1, 0.3, 8), V.M('#ffb31a')); beak.rotation.z = Math.PI / 2; beak.position.x = -0.48; gr.add(beak); gr.userData.wings = [1, -1].map((s2) => { const w = V.box(0.35, 0.04, 0.5, '#5b6178', 0.05, 0.2, s2 * 0.3, gr); return w; }); }
+      sc.add(gr); return gr; });
+    D3.mis = V.pool(() => { const gr = new Th.Group(); const b = V.cyl(0.17, 0.17, 1.1, '#c9cfdb', 0, 0, 0, gr, 12); b.rotation.z = Math.PI / 2; const n = new Th.Mesh(new Th.ConeGeometry(0.17, 0.4, 12), V.M('#ff4d5e')); n.rotation.z = Math.PI / 2; n.position.x = -0.75; gr.add(n); V.box(0.2, 0.6, 0.04, '#3c435a', 0.45, 0, 0, gr); sc.add(gr); return gr; });
+    V.camera.fov = 52; V.camera.updateProjectionMatrix();
+  });
+  function draw3() {
+    const Th = V.T, t = R.t, rx = SX(R.dist), camX = rx + 5.2;
+    V.camera.position.set(camX, 0.6, 15); V.camera.lookAt(camX, 0.2, 0);
+    const thrust = held || keys.Space || keys.ArrowUp || keys.KeyW;
+    D3.rocket.visible = !R.over; D3.rocket.position.set(rx, SY(R.y), 0); D3.rocket.rotation.z = Math.max(-0.5, Math.min(0.5, -R.vy / 1100)); D3.rocket.rotation.x = t * 1.2;
+    if (D3.body.userData.c !== R.color) { D3.body.material = V.M(R.color, { metalness: 0.4, roughness: 0.3 }); D3.body.userData.c = R.color; }
+    D3.flame.visible = thrust && !R.over; D3.flame.scale.set(1, 0.8 + Math.random() * 0.5, 1);
+    D3.shield.visible = R.shields > 0; D3.rocket.traverse((o) => { if (o.material && o !== D3.shield) o.visible = !(R.inv > 0 && Math.sin(t * 30) > 0) || o === D3.rocket; });
+    if (thrust && !R.over && Math.random() < 0.6) V.puff(rx - 1.1, SY(R.y), 0, '#e8e8ee', 0.4, 0.8, -3, -0.4, (Math.random() - 0.5), 1.2, 0.6);
+    const span = 23 * 2.4 / 2;
+    for (const c of D3.clouds) { const u = c.userData, x = camX - 30 + ((((u.off - camX * 0.98) % 55) + 55) % 55); c.position.set(x, u.top ? SY(CEIL) + 1 + u.dy : SY(FLOOR) - 1 - u.dy, u.z); }
+    for (const c of D3.far) { const u = c.userData, x = camX - 60 + ((((u.off * 1 - camX * 0.6) % 144) + 144) % 144); c.position.set(x, u.y, u.z); }
+    D3.items.sync(R.items, (m, it) => { m.position.set(SX(it.x), SY(it.y), 0); m.rotation.y = t * 3 + it.x * 0.01; });
+    D3.obs.sync(R.obs, (m, o) => { m.position.set(SX(o.x), SY(o.y), 0); if (o.type === 'zap') m.rotation.z = -o.a; else { m.userData.wings.forEach((w, i) => (w.rotation.x = (i ? -1 : 1) * Math.sin(t * 18 + o.ph) * 0.8)); } });
+    D3.mis.sync(R.missiles.filter((mi) => mi.warn <= 0), (m, mi) => { m.position.set(SX(mi.x), SY(mi.y), 0); if (Math.random() < 0.5) V.puff(SX(mi.x) + 0.7, SY(mi.y), 0, '#c9cfdb', 0.35, 0.4, 2, 0, 0, 0.8, 0.6); });
+    for (const q of R.parts) if (!q.shown && q.size > 5) { q.shown = true; V.puff(SX(q.x), SY(q.y), 0, q.color, 0.25, 0.6, q.vx * K, -q.vy * K, 0, 0, 1, 6); }
+    V.frame();
+    for (const mi of R.missiles) if (mi.warn > 0) V.label(camX + 9.5, SY(mi.y), 0, '⚠️', { size: 30, alpha: Math.sin(t * 20) > 0 ? 1 : 0.5 });
+    if (!R.started) V.label(camX, -3.2, 0, 'Hold to fly · let go to drop', { size: 26, color: '#16203d', bg: 'rgba(255,255,255,.85)' });
+  }
+
   function sload() {
     SS = Object.assign({ best: 0, runs: 0, owned: ['red'], skin: 'red' }, store.get('lsp_sky_' + profile.email, {}));
     SS.upg = Object.assign({ magnet: 0, value: 0, armor: 0 }, SS.upg || {});
@@ -74,7 +127,7 @@
       rng: L.rng((Date.now() & 0xffff) + 1),
     };
     scr.classList.toggle('touch', L.isTouch());
-    L.closeModal('sd-modal'); show('s-sky'); fit();
+    L.closeModal('sd-modal'); show('s-sky'); fit(); V.init();
     cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(loop);
   }
 
@@ -209,6 +262,7 @@
   }
 
   function draw() {
+    if (V.ready) return draw3();
     const z = view.z, W = vw(), camX = R.dist - px();
     g.setTransform(1, 0, 0, 1, 0, 0);
     const gr = g.createLinearGradient(0, 0, 0, view.h); gr.addColorStop(0, '#bfe3ff'); gr.addColorStop(0.7, '#eaf6ff'); gr.addColorStop(1, '#fff5e8'); g.fillStyle = gr; g.fillRect(0, 0, view.w, view.h);
