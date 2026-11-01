@@ -61,6 +61,94 @@
   const cv = A.cv, g = A.g;
   let W = null;
 
+  /* ---------- 3D town ---------- */
+  const K = 1 / 40, TX = (x) => x * K, TZ = (y) => y * K;
+  const V = L.g3d(A, { sky: ['#5ea4e8', '#cfe7f8'], fogNear: 40, fogFar: 110, shadowSize: 22 });
+  const D3 = {};
+  const ROOFS = ['#e0664f', '#4f7de0', '#4fb86d', '#e0a84f', '#8a5cff', '#e0804f', '#3fb8a8', '#d65fa8'];
+  V.onReady((V) => {
+    const T = V.T, sc = V.scene;
+    const grass = V.tex(64, 64, (c) => { c.fillStyle = '#86c46e'; c.fillRect(0, 0, 64, 64); c.fillStyle = '#7dbb66'; c.fillRect(0, 0, 32, 32); c.fillRect(32, 32, 32, 32); }, [40, 30]);
+    const gr = new T.Mesh(new T.PlaneGeometry(TX(WW) + 60, TZ(WH) + 60), new T.MeshStandardMaterial({ map: grass, roughness: 1 })); gr.rotation.x = -Math.PI / 2; gr.position.set(TX(WW / 2), 0, TZ(WH / 2)); gr.receiveShadow = true; sc.add(gr);
+    const road = V.M('#6f7685', { roughness: 0.9 }), walk = V.M('#dfe3ea'), line = V.M('#ffffff');
+    for (const y of HROADS) { V.box(TX(WW), 0.06, TZ(RW + 28), walk, TX(WW / 2), 0.03, TZ(y), sc, false); V.box(TX(WW), 0.08, TZ(RW), road, TX(WW / 2), 0.05, TZ(y), sc, false); for (let x = 0; x < WW; x += 60) V.box(TX(30), 0.09, 0.1, line, TX(x + 15), 0.06, TZ(y), sc, false); }
+    for (const x of VROADS) { V.box(TX(RW + 28), 0.065, TZ(VROAD_END), walk, TX(x), 0.032, TZ(VROAD_END / 2), sc, false); V.box(TX(RW), 0.085, TZ(VROAD_END), road, TX(x), 0.052, TZ(VROAD_END / 2), sc, false); for (let y = 0; y < VROAD_END; y += 60) V.box(0.1, 0.095, TZ(30), line, TX(x), 0.062, TZ(y + 15), sc, false); }
+    // park with a pond and trees
+    V.box(TX(PARK.w), 0.05, TZ(PARK.h), '#9fd68a', TX(PARK.x + PARK.w / 2), 0.03, TZ(PARK.y + PARK.h / 2), sc, false);
+    const pond = V.cyl(TX(50), TX(50), 0.08, V.M('#5fb6ef', { roughness: 0.1, metalness: 0.2 }), TX(PARK.x + PARK.w / 2), 0.06, TZ(PARK.y + PARK.h / 2), sc, 32);
+    D3.fountain = V.cyl(0.08, 0.15, 0.8, '#ffffff', TX(PARK.x + PARK.w / 2), 0.4, TZ(PARK.y + PARK.h / 2), sc, 8);
+    for (const [tx, ty] of [[40, 40], [340, 50], [40, 250], [330, 240], [190, 30]]) V.tree(TX(PARK.x + tx), TZ(PARK.y + ty), 0.9);
+    for (let i = 0; i < 30; i++) { const x = Math.random() * WW, y = Math.random() * WH; if (!inB(x, y, 40) && !HROADS.some((h) => Math.abs(h - y) < 80) && !VROADS.some((v) => Math.abs(v - x) < 80 && y < VROAD_END + 20)) V.tree(TX(x), TZ(y), 0.6 + Math.random() * 0.4); }
+    // buildings
+    for (const b of BUILD) {
+      const h = b.house != null ? 2.6 : b.id === 'hospital' ? 5.5 : b.id === 'bank' ? 4.8 : 4, cx = TX(b.x + b.w / 2), cz = TZ(b.y + b.h / 2), w = TX(b.w), d = TZ(b.h);
+      const wall = V.M(b.color, { roughness: 0.8 });
+      V.box(w, h, d, wall, cx, h / 2, cz);
+      if (b.house != null) { const roof = new T.Mesh(new T.ConeGeometry(Math.max(w, d) * 0.78, 1.8, 4), V.M(ROOFS[b.house])); roof.rotation.y = Math.PI / 4; roof.scale.set(w / Math.max(w, d), 1, d / Math.max(w, d)); roof.position.set(cx, h + 0.9, cz); roof.castShadow = true; sc.add(roof); }
+      else { V.box(w + 0.2, 0.3, d + 0.2, '#8a93ab', cx, h + 0.15, cz); }
+      const fz = TZ(b.y + b.h) + 0.03, nw = Math.max(1, Math.floor(b.w / 90));
+      for (let i = 0; i < nw; i++) for (let fl = 0; fl < Math.floor(h / 1.6); fl++) V.box(TX((b.w - 48) / nw - 20), 0.7, 0.06, V.M('#9fd3f2', { roughness: 0.1, metalness: 0.3 }), TX(b.x + 24 + i * ((b.w - 48) / nw) + 6 + ((b.w - 48) / nw - 20) / 2), 1.1 + fl * 1.6 + (b.house != null ? 0.2 : 0.6), fz, sc, false);
+      V.box(1, 1.6, 0.08, '#6f5238', cx, 0.8, fz + 0.01, sc, false);
+      const label = V.sprite(`${b.icon} ${b.name}`, Math.min(7, 1.4 + b.name.length * 0.32), 0.9, 'rgba(22,32,61,.75)', '#fff'); label.position.set(cx, h + (b.house != null ? 2.3 : 1.2), cz); b.sprite = label;
+    }
+    D3.flames = new T.Group(); sc.add(D3.flames);
+    D3.npc = V.pool((n) => V.person(n.shirt.replace(/hsl\((\d+),(\d+)%,(\d+)%\)/, (m, a, b, c) => `hsl(${a}, ${b}%, ${c}%)`), '#3d4a6b', n.skin, n.kind === 'robber' ? '#16203d' : null));
+    D3.cars = V.pool((c) => carMesh(c.color.replace(/hsl\((\d+),(\d+)%,(\d+)%\)/, (m, a, b, cc) => `hsl(${a}, ${b}%, ${cc}%)`), 1.9, 1));
+    D3.marker = new T.Mesh(new T.ConeGeometry(0.4, 0.8, 12), V.M('#ff4d5e', { emissive: '#ff4d5e', emissiveIntensity: 0.6 })); D3.marker.rotation.x = Math.PI; sc.add(D3.marker);
+    D3.ring = new T.Mesh(new T.RingGeometry(0.3, 0.42, 24), new T.MeshBasicMaterial({ color: '#2f6bff', transparent: true, opacity: 0.6 })); D3.ring.rotation.x = -Math.PI / 2; D3.ring.position.y = 0.12; sc.add(D3.ring);
+    V.camera.fov = 50; V.camera.updateProjectionMatrix(); V.follow = new T.Vector3(); D3.cam = null;
+  });
+  function carMesh(color, L2 = 1.9, W2 = 1) {
+    const T = V.T, g = new T.Group(); V.box(L2, 0.5, W2, V.M(color, { metalness: 0.4, roughness: 0.35 }), 0, 0.45, 0, g); V.box(L2 * 0.55, 0.42, W2 * 0.9, V.M('#22303f', { roughness: 0.1, metalness: 0.4 }), -L2 * 0.05, 0.9, 0, g);
+    for (const [x, z] of [[L2 * 0.32, W2 / 2], [-L2 * 0.32, W2 / 2], [L2 * 0.32, -W2 / 2], [-L2 * 0.32, -W2 / 2]]) { const w = V.cyl(0.2, 0.2, 0.14, '#17181c', x, 0.2, z, g, 10); w.rotation.x = Math.PI / 2; }
+    V.box(0.04, 0.12, W2 * 0.7, V.M('#fffbe6', { emissive: '#fff4c2', emissiveIntensity: 1 }), L2 / 2, 0.5, 0, g, false);
+    V.scene.add(g); return g;
+  }
+  function meMesh() {
+    const ride = S.ride, shirt = SHIRTS.find((s) => s.id === S.shirt).color, hatId = S.hat;
+    const key = [ride, shirt, hatId, W.p.inRide].join('|'); if (D3.meKey === key) return D3.me;
+    if (D3.me) V.scene.remove(D3.me);
+    const T = V.T, g = new T.Group(), hatCol = { cap: '#2f6bff', grad: '#16203d', top: '#16203d', crown: '#f2b61f' }[hatId];
+    if (W.p.inRide && ride !== 'walk') {
+      const R = RIDES.find((r) => r.id === ride), big = ['car', 'sports'].includes(ride);
+      if (big) { const c = carMesh(R.color, ride === 'sports' ? 2.2 : 2, 1.05); V.scene.remove(c); g.add(c); }
+      else { V.box(1.2, 0.12, 0.2, R.color, 0, 0.45, 0, g); for (const x of [-0.45, 0.45]) { const w = V.cyl(0.25, 0.25, 0.08, '#17181c', x, 0.25, 0, g, 12); w.rotation.x = Math.PI / 2; } const p = V.person(shirt, '#3d4a6b', SKIN[0], hatCol); V.scene.remove(p); p.scale.setScalar(0.55); p.position.y = 0.35; p.rotation.y = Math.PI / 2; g.add(p); }
+    } else { const p = V.person(shirt, '#3d4a6b', SKIN[0], hatCol); V.scene.remove(p); p.scale.setScalar(0.62); p.rotation.y = Math.PI / 2; g.add(p); g.userData.p = p; }
+    V.scene.add(g); D3.me = g; D3.meKey = key; return g;
+  }
+  function draw3() {
+    const T = V.T, p = W.p, t = W.t;
+    const me = meMesh(); me.position.set(TX(p.x), 0, TZ(p.y)); me.rotation.y = -p.face;
+    if (me.userData.p) V.walk(me.userData.p, t * 10, p.moving ? 1 : 0);
+    D3.npc.sync(W.npcs, (m, n) => { m.position.set(TX(n.x), 0, TZ(n.y)); m.scale.setScalar(0.6); m.rotation.y = Math.PI / 2 - (n.face || 0); V.walk(m, t * 9 + n.x, Math.hypot(n.tx - n.x, n.ty - n.y) > 4 ? 1 : 0); if (n.follow) m.rotation.z = 0; });
+    D3.cars.sync(W.cars, (m, c) => { m.position.set(TX(c.x), 0, TZ(c.y)); m.rotation.y = c.hz ? (c.v > 0 ? 0 : Math.PI) : (c.v > 0 ? -Math.PI / 2 : Math.PI / 2); });
+    D3.fountain.scale.y = 1 + Math.sin(t * 3) * 0.2;
+    // fire on a house
+    while (D3.flames.children.length) D3.flames.remove(D3.flames.children[0]);
+    if (W.fireHouse) { const b = W.fireHouse; for (let i = 0; i < 3; i++) V.puff(TX(b.x + Math.random() * b.w), 3.5 + Math.random(), TZ(b.y + Math.random() * b.h), Math.random() < 0.5 ? '#ff8a3d' : '#ffd640', 1, 0.6, 0, 2.5, 0, 0.5, 1); if (Math.random() < 0.3) V.puff(TX(b.x + b.w / 2), 5, TZ(b.y + b.h / 2), '#4a4a50', 1.6, 2, 0.3, 1.5, 0, 1, 0.5); }
+    for (const q of W.parts) if (!q.shown) { q.shown = true; V.puff(TX(q.x), 1, TZ(q.y), q.c, 0.25, 0.5, q.vx * K, 1, q.vy * K, 0, 1, 4); }
+    // target marker
+    const j = W.job; let tgt = null;
+    if (j) { if (j.target && !(j.type === 'doctor' && j.stage === 'find')) tgt = doorOf(j.target); if (j.npc && (j.stage === 'find' || j.stage === 'chase')) tgt = { x: j.npc.x, y: j.npc.y }; }
+    D3.marker.visible = !!tgt; if (tgt) D3.marker.position.set(TX(tgt.x), 2.6 + Math.sin(t * 6) * 0.2, TZ(tgt.y));
+    D3.ring.visible = !!p.target; if (p.target) D3.ring.position.set(TX(p.target.x), 0.12, TZ(p.target.y));
+    // camera: behind and above, always facing north so WASD matches the screen
+    const tx = TX(p.x), tz = TZ(p.y), dist = p.inRide ? 13 : 10;
+    if (!D3.cam) D3.cam = new T.Vector3(tx, dist, tz + dist * 0.85);
+    D3.cam.lerp(new T.Vector3(tx, dist * 0.95, tz + dist * 0.85), 0.12);
+    V.camera.position.copy(D3.cam); V.camera.lookAt(D3.cam.x, 0.5, D3.cam.z - dist * 0.85); V.follow.set(tx, 0, tz);
+    V.frame();
+    const nameSt = { size: 12, weight: 800, family: 'Nunito, system-ui, sans-serif', color: 'rgba(22,32,61,.85)', stroke: 'rgba(255,255,255,.85)' };
+    for (const n of W.npcs) { if (Math.abs(n.x - p.x) > 700 || Math.abs(n.y - p.y) > 500) continue; V.label(TX(n.x), 1.55, TZ(n.y), n.name, nameSt); if (n.sayT > 0) V.label(TX(n.x), 2.1, TZ(n.y), n.say, { size: 13, weight: 800, family: 'Nunito, system-ui, sans-serif', bg: '#ffffff' }); }
+    const myName = profile.email.split('@')[0];
+    V.label(tx, p.inRide ? 1.9 : 1.55, tz, myName, { ...nameSt, color: '#1f4fd1', size: 13 });
+    if (p.sayT > 0) V.label(tx, 2.2, tz, p.say, { size: 13, weight: 800, family: 'Nunito, system-ui, sans-serif', bg: '#ffffff' });
+    for (const f of W.floats) V.label(TX(f.x), 2.5 + (2 - f.t) * 0.3, TZ(f.y + 40), f.txt, { size: 22, color: '#e89a00', stroke: '#fff', alpha: Math.min(1, f.t) });
+    if (W.near) { const d = doorOf(W.near); V.label(TX(d.x), 2.3, TZ(d.y), A.scr.classList.contains('touch') ? 'Tap ACT' : 'Press E', { size: 13, weight: 800, family: 'Nunito, system-ui, sans-serif', bg: '#ffffff' }); }
+    if (j && j.type === 'fire' && W.fireHouse && j.fire > 0) { const b = W.fireHouse, q = V.toScreen(TX(b.x + b.w / 2), 5.5, TZ(b.y + b.h / 2)); g.fillStyle = '#fff'; g.fillRect(q.x - 50 * q.d, q.y, 100 * q.d, 10 * q.d); g.fillStyle = '#4fb6f0'; g.fillRect(q.x - 50 * q.d, q.y, 100 * q.d * j.fire, 10 * q.d); }
+    if (tgt) { const q = V.toScreen(TX(tgt.x), 1, TZ(tgt.y)), v = A.view, m = 40 * v.d; if (q.behind || q.x < m || q.x > v.w - m || q.y < m + 50 * v.d || q.y > v.h - m) { const a = Math.atan2(q.y - v.h / 2, q.x - v.w / 2) * (q.behind ? -1 : 1), ex = Math.max(m, Math.min(v.w - m, v.w / 2 + Math.cos(a) * v.w)), ey = Math.max(m + 50 * v.d, Math.min(v.h - m, v.h / 2 + Math.sin(a) * v.h)); g.save(); g.translate(ex, ey); g.rotate(a); g.fillStyle = '#ff4d5e'; g.beginPath(); g.moveTo(18 * v.d, 0); g.lineTo(-10 * v.d, -12 * v.d); g.lineTo(-10 * v.d, 12 * v.d); g.fill(); g.restore(); } }
+  }
+
   /* ---------- world ---------- */
   const doorOf = (b) => ({ x: b.x + b.w / 2, y: b.y + b.h + 26 });
   const inB = (x, y, pad) => BUILD.some((b) => x > b.x - pad && x < b.x + b.w + pad && y > b.y - pad && y < b.y + b.h + pad);
@@ -85,7 +173,7 @@
       npcs: Array.from({ length: 16 }, () => makeNpc('npc')), cars: [], job: null, earned: 0, t: 0, floats: [], parts: [], cam: { x: home.x, y: home.y }, near: null, actPrev: false, fireHouse: null,
     };
     for (let i = 0; i < 6; i++) { const hz = i % 2 === 0, lane = i % 4 < 2 ? -22 : 22; W.cars.push(hz ? { hz, x: Math.random() * WW, y: HROADS[i % 2] + lane, v: lane < 0 ? -140 : 140, color: `hsl(${(Math.random() * 360) | 0},70%,60%)` } : { hz, x: VROADS[i % 3] + lane, y: Math.random() * VROAD_END, v: lane < 0 ? 140 : -140, color: `hsl(${(Math.random() * 360) | 0},70%,60%)` }); }
-    A.play(); updateHud(); A.run(step);
+    A.play(); V.init(); updateHud(); A.run(step);
   }
   A.onAgain = start;
 
@@ -224,7 +312,8 @@
   cv.addEventListener('pointerdown', (e) => {
     if (!W || A.paused) return;
     const v = A.view, r = cv.getBoundingClientRect();
-    const wx = ((e.clientX - r.left) * v.d - v.w / 2) / W.z + W.cam.x, wy = ((e.clientY - r.top) * v.d - v.h / 2) / W.z + W.cam.y;
+    let wx = ((e.clientX - r.left) * v.d - v.w / 2) / W.z + W.cam.x, wy = ((e.clientY - r.top) * v.d - v.h / 2) / W.z + W.cam.y;
+    if (V.ready) { const h = V.pick(e, { y: 0 }); if (!h) return; wx = h.x / K; wy = h.z / K; }
     const b = BUILD.find((b) => wx > b.x && wx < b.x + b.w && wy > b.y && wy < b.y + b.h);
     if (b) { const d = doorOf(b); W.p.target = d; W.p.pending = b; } else { W.p.target = { x: wx, y: wy }; W.p.pending = null; }
   });
@@ -254,6 +343,7 @@
     g.restore();
   }
   function draw() {
+    if (V.ready) return draw3();
     const v = A.view, p = W.p;
     W.z = Math.max(0.45, Math.min(v.w / 900, v.h / 700));
     const z = W.z, vw = v.w / z, vh = v.h / z;
