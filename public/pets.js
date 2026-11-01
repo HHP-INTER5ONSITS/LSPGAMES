@@ -33,6 +33,75 @@
   const g = A.g;
   let P = null, R = null;
 
+  /* ---------- 3D pet room ---------- */
+  const PX = (x) => (x - 500) * 0.012, PZ = (y) => (y - 450) * 0.02;
+  const V = L.g3d(A, { background: '#f6e7d2', fog: false, shadowSize: 8, hemi: 1.05 });
+  const D3 = {};
+  V.onReady((V) => {
+    const T = V.T, sc = V.scene;
+    const fl = V.tex(128, 128, (c) => { for (let i = 0; i < 4; i++) { c.fillStyle = ['#d9b58a', '#cfa97c', '#e0bd93', '#d4ae82'][i]; c.fillRect(0, i * 32, 128, 32); c.fillStyle = 'rgba(0,0,0,.08)'; c.fillRect(0, i * 32 + 31, 128, 1); } }, [6, 6]);
+    const floor = new T.Mesh(new T.PlaneGeometry(16, 10), new T.MeshStandardMaterial({ map: fl, roughness: 0.6 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; sc.add(floor);
+    const wp = V.tex(64, 64, (c) => { c.fillStyle = '#fbe9d0'; c.fillRect(0, 0, 64, 64); c.fillStyle = '#f3dcbc'; c.fillRect(0, 0, 32, 64); }, [10, 3]);
+    const back = new T.Mesh(new T.PlaneGeometry(16, 6), new T.MeshStandardMaterial({ map: wp })); back.position.set(0, 3, -4); back.receiveShadow = true; sc.add(back);
+    for (const x of [-8, 8]) { const w = new T.Mesh(new T.PlaneGeometry(10, 6), new T.MeshStandardMaterial({ map: wp })); w.position.set(x, 3, 1); w.rotation.y = x < 0 ? Math.PI / 2 : -Math.PI / 2; sc.add(w); }
+    V.box(2.6, 1.9, 0.1, '#ffffff', 0, 3, -3.95, sc, false); V.box(2.4, 1.7, 0.12, '#cfe8ff', 0, 3, -3.93, sc, false); V.box(0.08, 1.7, 0.14, '#ffffff', 0, 3, -3.9, sc, false);
+    const rug = new T.Mesh(new T.CircleGeometry(1.8, 40), V.M('#ffb6c9')); rug.rotation.x = -Math.PI / 2; rug.position.set(PX(520), 0.01, PZ(450)); rug.receiveShadow = true; sc.add(rug);
+    // bed, bowl, tub, toy box
+    const bed = new T.Group(); bed.position.set(PX(160), 0, PZ(330)); sc.add(bed);
+    V.box(2.2, 0.35, 1.4, '#8a5cff', 0, 0.18, 0, bed); V.box(1.8, 0.2, 1.1, '#b89cff', 0, 0.42, 0, bed); V.box(2.2, 0.6, 0.2, '#8a5cff', 0, 0.45, -0.65, bed);
+    const bowl = V.cyl(0.45, 0.32, 0.25, '#ff4d5e', PX(250), 0.13, PZ(520), sc, 20); D3.food = V.cyl(0.36, 0.36, 0.04, '#c98b52', PX(250), 0.25, PZ(520), sc, 20);
+    const tub = new T.Group(); tub.position.set(PX(765), 0, PZ(480)); sc.add(tub);
+    V.box(2.1, 0.7, 1.2, '#ffffff', 0, 0.35, 0, tub); V.box(1.85, 0.05, 0.95, '#9fd4ff', 0, 0.66, 0, tub);
+    V.box(1.1, 0.8, 0.8, '#14c79a', PX(910), 0.4, PZ(330)); const teddy = V.sprite('🧸', 0.6, 0.6); teddy.position.set(PX(910), 1.1, PZ(330));
+    D3.ball = V.ball(0.14, '#d4f04a', 0, 0, 0); D3.ball.visible = false;
+    V.camera.fov = 48; V.camera.position.set(0, 4.2, 8.2); V.camera.lookAt(0, 0.9, -0.6); V.camera.updateProjectionMatrix(); V.follow = new T.Vector3(0, 0, 0);
+  });
+  function petMesh(pet) {
+    const T = V.T, Ty = TYPES[pet.type], g = new T.Group(), body = V.M(Ty.body, { roughness: 0.6 }), dark = V.M('#16203d');
+    const torso = V.ball(0.42, body, 0, 0.45, 0, g); torso.scale.set(0.85, 0.7, 1.05);
+    if (Ty.belly) { const b = V.ball(0.3, Ty.belly, 0, 0.42, 0.18, g); b.scale.set(0.8, 0.8, 0.6); }
+    for (const [x, z] of [[-0.2, 0.25], [0.2, 0.25], [-0.2, -0.25], [0.2, -0.25]]) V.cyl(0.08, 0.08, 0.3, body, x, 0.15, z, g, 8);
+    const head = new T.Group(); head.position.set(0, 0.85, 0.36); g.add(head); g.userData.head = head;
+    V.ball(0.32, body, 0, 0, 0, head);
+    if (Ty.ear === 'point') for (const x of [-0.17, 0.17]) { const e = new T.Mesh(new T.ConeGeometry(0.09, 0.24, 8), body); e.position.set(x, 0.3, 0); e.castShadow = true; head.add(e); }
+    if (Ty.ear === 'flop') for (const x of [-0.3, 0.3]) { const e = V.ball(0.1, '#8b5a33', x, -0.02, 0, head); e.scale.set(0.6, 1.4, 1); }
+    if (Ty.ear === 'long') for (const x of [-0.12, 0.12]) { const e = V.ball(0.08, body, x, 0.42, -0.02, head); e.scale.set(0.8, 3, 0.6); }
+    if (Ty.ear === 'round') for (const x of [-0.24, 0.24]) V.ball(0.09, '#2b3350', x, 0.24, 0, head);
+    if (Ty.patch) for (const x of [-0.12, 0.12]) { const p = V.ball(0.08, '#2b3350', x, 0.04, 0.27, head); p.scale.set(1, 1.3, 0.5); }
+    if (Ty.horn) { const h = new T.Mesh(new T.ConeGeometry(0.06, 0.32, 8), V.M('#ffd640', { metalness: 0.4 })); h.position.set(0, 0.4, 0.12); h.rotation.x = 0.4; head.add(h); }
+    if (Ty.mane) ['#ff8ac2', '#b48cff', '#7fd4ff'].forEach((m, i) => V.ball(0.11, m, 0, 0.18 - i * 0.15, -0.26, head));
+    if (Ty.crest) for (let i = 0; i < 3; i++) { const c = V.ball(0.06, '#ffd640', 0, 0.36, -0.08 + i * 0.08, head); c.scale.y = 2; }
+    if (Ty.wings) for (const x of [-1, 1]) { const w = V.ball(0.3, Ty.wings, x * 0.38, 0.62, -0.05, g); w.scale.set(0.25, 0.6, 1); g.userData.wings = (g.userData.wings || []).concat(w); }
+    if (Ty.tail || ['puppy', 'kitten', 'dragon', 'fox'].includes(pet.type)) { const t = V.ball(0.1, Ty.tail || Ty.body, 0, 0.6, -0.48, g); t.scale.set(0.8, 0.8, 2.2); t.rotation.x = -0.6; g.userData.tail = t; }
+    g.userData.eyes = [-0.11, 0.11].map((x) => { const e = V.ball(0.05, dark, x, 0.05, 0.28, head, 10); return e; });
+    if (Ty.beak) { const b = new T.Mesh(new T.ConeGeometry(0.07, 0.18, 8), V.M('#ffb31a')); b.rotation.x = Math.PI / 2; b.position.set(0, -0.05, 0.36); head.add(b); }
+    else V.ball(0.04, '#ff8aa8', 0, -0.06, 0.31, head, 8);
+    V.scene.add(g); return g;
+  }
+  function draw3() {
+    const t = R.t;
+    if (!D3.pet || D3.pet.userData.id !== P.id || D3.pet.userData.age !== P.age) { if (D3.pet) V.scene.remove(D3.pet); D3.pet = petMesh(P); D3.pet.userData.id = P.id; D3.pet.userData.age = P.age; }
+    const pm = D3.pet, sc = 0.72 + P.age * 0.1;
+    let x = R.x, y = R.y, face = R.face;
+    if (R.action === 'energy') { x = 160; y = 330; } else if (R.action === 'clean') { x = 765; y = 480; face = -1; }
+    const hop = R.action === 'energy' || R.action === 'clean' ? 0 : Math.abs(Math.sin(R.bob)) * 0.12;
+    pm.position.set(PX(x), hop + (R.action === 'energy' ? 0.5 : R.action === 'clean' ? 0.35 : 0), PZ(y));
+    const want = R.target || R.action === 'fun' ? Math.atan2(PX(R.tx) - PX(R.x), PZ(R.ty) - PZ(R.y)) : face > 0 ? 0.9 : -0.9;
+    pm.rotation.y += (((want - pm.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * 0.15;
+    pm.scale.setScalar(sc * 1.3);
+    const sleeping = R.action === 'energy'; pm.userData.eyes.forEach((e) => (e.scale.y = sleeping ? 0.15 : 1));
+    if (pm.userData.tail) pm.userData.tail.rotation.y = Math.sin(t * 10) * 0.5;
+    if (pm.userData.wings) pm.userData.wings.forEach((w, i) => (w.rotation.z = (i ? -1 : 1) * (0.3 + Math.sin(t * 8) * 0.3)));
+    pm.userData.head.rotation.x = R.action === 'hunger' ? 0.5 + Math.sin(t * 14) * 0.15 : 0;
+    D3.ball.visible = !!R.ball; if (R.ball) D3.ball.position.set(PX(R.ball.x), Math.max(0.14, (470 - R.ball.y) * 0.012 + 0.14), PZ(470));
+    D3.food.visible = P.needs.hunger > 20 || R.action === 'hunger';
+    for (const q of R.parts) if (!q.shown && !q.text) { q.shown = true; V.puff(PX(q.x), q.c === 'bubble' ? 1 : 1.2, PZ(R.y) + 0.3, q.c === 'bubble' ? '#bfe8ff' : q.c, q.c === 'bubble' ? 0.25 : 0.18, q.c === 'bubble' ? 0.9 : 1, (q.vx || 0) * 0.01, q.c === 'bubble' ? 0.8 : -(q.vy || 0) * 0.012, 0, 0.1, 0.9, q.c === 'bubble' ? 0 : 7); }
+    V.frame();
+    for (const q of R.parts) if (q.text) V.label(PX(q.x), 2.2 + (1.3 - q.life) * 0.5, PZ(y), q.text, { size: 22, color: q.text === 'Z' ? '#8a5cff' : '#e89a00', stroke: '#fff', alpha: Math.max(0, Math.min(1, q.life)) });
+    if (!R.action && !R.target) { const low = NEEDS.filter((n) => P.needs[n.id] < 35).sort((a, b) => P.needs[a.id] - P.needs[b.id])[0]; if (low) V.label(PX(x), 2.3, PZ(y), low.icon, { size: 26, bg: '#ffffff' }); }
+    const v = A.view; g.setTransform(v.s, 0, 0, v.s, v.ox, v.oy); drawPanels(); g.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
   function decayOffline(p) {
     const hrs = (Date.now() - (p.seen || Date.now())) / 3.6e6;
     for (const n of NEEDS) p.needs[n.id] = Math.max(0, p.needs[n.id] - hrs * 12);
@@ -53,7 +122,7 @@
     S = DB.load(); P = S.pets.find((p) => p.id === (id || S.active)); if (!P) { A.openLobby('adopt'); return; }
     S.active = P.id; decayOffline(P); save();
     R = { x: 500, y: 450, tx: 500, ty: 450, face: 1, bob: 0, action: '', actT: 0, target: null, t: 0, parts: [], ball: null, wander: 2 };
-    A.play(); updHud(); A.run(step);
+    A.play(); V.init(); updHud(); A.run(step);
   }
   A.onAgain = () => visit();
   function updHud() { $('#pt-name').textContent = `${P.name} (${AGES[P.age]})`; }
@@ -135,6 +204,7 @@
   }
 
   function draw() {
+    if (V.ready) return draw3();
     A.begin(); const t = R.t;
     g.fillStyle = '#fbe9d0'; g.fillRect(0, 0, RW, 360);
     g.fillStyle = '#f3dcbc'; for (let x = 0; x < RW; x += 60) g.fillRect(x, 0, 30, 360);
@@ -161,6 +231,9 @@
       else { g.fillStyle = q.c; g.fillRect(q.x - 4, q.y - 4, 8, 8); }
     }
     g.globalAlpha = 1;
+    drawPanels();
+  }
+  function drawPanels() {
     // needs panel
     g.fillStyle = 'rgba(255,255,255,.92)'; rr(g, 16, 16, 250, 160, 16); g.fill();
     g.font = '800 15px Nunito, system-ui, sans-serif'; g.textAlign = 'left';
@@ -170,7 +243,7 @@
     g.fillStyle = RAR[TYPES[P.type].rar].color; g.font = '800 14px Nunito, system-ui, sans-serif'; g.fillText(`${RAR[TYPES[P.type].rar].name} ${TYPES[P.type].name}`, RW - 250, 40);
     g.fillStyle = '#16203d'; g.fillText(nx ? `${AGES[P.age]}: ${P.xp - XP_AT[P.age]} / ${nx - XP_AT[P.age]} XP` : 'Full Grown!', RW - 250, 60);
     g.fillStyle = '#edf1f8'; rr(g, RW - 250, 66, 218, 8, 4); g.fill(); g.fillStyle = '#ffb31a'; rr(g, RW - 250, 66, Math.max(6, 218 * pr), 8, 4); g.fill();
-  }
+    }
 
   function mini(pet) { const c = document.createElement('canvas'); c.width = 160; c.height = 130; drawPet(c.getContext('2d'), { x: 72, y: 118, face: 1, bob: 0 }, pet, 0.95); return c.toDataURL(); }
   A.onTab = (t) => {
