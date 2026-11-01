@@ -22,11 +22,53 @@
   const g = A.g;
   let G = null;
 
+  /* ---------- 3D arcade cabinet ---------- */
+  const V = L.g3d(A, { background: '#141a2e', fog: false, shadowSize: 16, hemi: 0.8 });
+  const D3 = {};
+  const BXp = (x) => x - CW / 2 + 0.5, BYp = (y) => CH - y - 0.5;
+  V.onReady((V) => {
+    const T = V.T, sc = V.scene;
+    const geo = new T.BoxGeometry(0.94, 0.94, 0.94);
+    D3.cells = new T.InstancedMesh(geo, new T.MeshStandardMaterial({ roughness: 0.25, metalness: 0.15 }), CW * CH + 8); D3.cells.castShadow = true; sc.add(D3.cells);
+    D3.ghost = new T.InstancedMesh(geo, new T.MeshStandardMaterial({ transparent: true, opacity: 0.22, roughness: 0.4 }), 4); sc.add(D3.ghost);
+    D3.next = new T.InstancedMesh(new T.BoxGeometry(0.6, 0.6, 0.6), new T.MeshStandardMaterial({ roughness: 0.3 }), 12); D3.next.castShadow = true; sc.add(D3.next);
+    // cabinet: back panel with grid, side rails, floor
+    const grid = V.tex(64, 64, (c) => { c.fillStyle = '#1d2540'; c.fillRect(0, 0, 64, 64); c.strokeStyle = '#2b3660'; c.lineWidth = 2; c.strokeRect(0, 0, 64, 64); }, [CW, CH]);
+    const back = new T.Mesh(new T.PlaneGeometry(CW, CH), new T.MeshStandardMaterial({ map: grid, roughness: 0.9 })); back.position.set(0, CH / 2, -0.5); back.receiveShadow = true; sc.add(back);
+    const rail = V.M('#3a4a7a', { metalness: 0.6, roughness: 0.3 }), neon = V.M('#4fd6ff', { emissive: '#4fd6ff', emissiveIntensity: 1.4 });
+    V.box(0.6, CH + 0.6, 1.4, rail, -CW / 2 - 0.3, CH / 2 - 0.3, 0); V.box(0.6, CH + 0.6, 1.4, rail, CW / 2 + 0.3, CH / 2 - 0.3, 0); V.box(CW + 1.2, 0.6, 1.4, rail, 0, -0.3, 0);
+    V.box(0.08, CH + 0.6, 0.08, neon, -CW / 2 - 0.05, CH / 2 - 0.3, 0.72, sc, false); V.box(0.08, CH + 0.6, 0.08, neon, CW / 2 + 0.05, CH / 2 - 0.3, 0.72, sc, false);
+    const floor = V.ground(80, 60, '#0f1424', -0.6); floor.material = V.M('#1a2036', { roughness: 0.3, metalness: 0.4 });
+    V.box(4, 8, 1, '#232d4d', 8.2, 14.5, -0.6); const nx = V.sprite('NEXT', 3, 0.8, null, '#9fb3e6'); nx.position.set(8.2, 18, 0.2);
+    for (let i = 0; i < 14; i++) { const p = V.box(1 + Math.random() * 2, 4 + Math.random() * 14, 1, ['#2b3660', '#22305a', '#30285a'][i % 3], -24 + i * 3.6 + (Math.abs(-24 + i * 3.6) < 9 ? 30 : 0), 0, -14, sc, false); p.position.y = p.geometry.parameters.height / 2 - 0.6; }
+    const l = new T.PointLight('#4fd6ff', 40, 30); l.position.set(-6, 12, 6); sc.add(l); const l2 = new T.PointLight('#b36bff', 40, 30); l2.position.set(7, 6, 6); sc.add(l2);
+    V.camera.position.set(1.2, 10.2, 25); V.camera.lookAt(1.2, 9.6, 0); V.follow = new T.Vector3(0, 8, 0); V.sun.position.set(6, 30, 20);
+    D3.m = new T.Matrix4(); D3.c = new T.Color();
+  });
+  function draw3() {
+    const T = V.T, m = D3.m, c = D3.c; let n = 0;
+    const put = (im, i, x, y, z, col, s = 1) => { m.makeScale(s, s, s); m.setPosition(x, y, z); im.setMatrixAt(i, m); im.setColorAt(i, c.set(col)); };
+    G.board.forEach((row, y) => row.forEach((col, x) => { if (col) put(D3.cells, n++, BXp(x), BYp(y), 0, col); }));
+    let gn = 0;
+    if (G.cur && !A.over) {
+      let gy = G.cur.y; while (!hit(G.cur.m, G.cur.x, gy + 1)) gy++;
+      const col = P[G.cur.k].c, drop = Math.min(1, G.fall / Math.max(0.06, 0.8 * Math.pow(0.82, G.level - 1)));
+      const smoothY = hit(G.cur.m, G.cur.x, G.cur.y + 1) ? 0 : drop * 0.25;
+      G.cur.m.forEach((row, r) => row.forEach((v, cc) => { if (!v) return; if (gy + r >= 0 && gy !== G.cur.y) put(D3.ghost, gn++, BXp(G.cur.x + cc), BYp(gy + r), 0, col); if (G.cur.y + r >= 0) put(D3.cells, n++, BXp(G.cur.x + cc), BYp(G.cur.y + r) - smoothY, 0, col); }));
+    }
+    D3.cells.count = n; D3.cells.instanceMatrix.needsUpdate = true; if (D3.cells.instanceColor) D3.cells.instanceColor.needsUpdate = true;
+    D3.ghost.count = gn; D3.ghost.instanceMatrix.needsUpdate = true; if (D3.ghost.instanceColor) D3.ghost.instanceColor.needsUpdate = true;
+    let k = 0; G.queue.slice(0, 3).forEach((key, i) => P[key].m.forEach((row, r) => row.forEach((v, cc) => { if (v && k < 12) put(D3.next, k++, 7.3 + cc * 0.62, 16.8 - i * 2.3 - r * 0.62, 0, P[key].c); })));
+    D3.next.count = k; D3.next.instanceMatrix.needsUpdate = true; if (D3.next.instanceColor) D3.next.instanceColor.needsUpdate = true;
+    for (const f of G.flash) if (f.t > 0.2) { for (let x = 0; x < CW; x += 2) V.puff(BXp(x), BYp(f.y), 0.6, '#ffffff', 0.8, 0.4, (Math.random() - 0.5) * 3, Math.random() * 3, 2, 1, 0.9); }
+    V.frame();
+  }
+
   function bag() { const k = Object.keys(P); for (let i = k.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [k[i], k[j]] = [k[j], k[i]]; } return k; }
   function start() {
     S = DB.load();
     G = { board: Array.from({ length: CH }, () => Array(CW).fill(null)), queue: [...bag(), ...bag()], cur: null, score: 0, lines: 0, level: 1, fall: 0, lock: 0, flash: [], t: 0, rep: {} };
-    spawn(); A.play(); A.run(step); hud();
+    spawn(); A.play(); V.init(); A.run(step); hud();
   }
   A.onAgain = start;
   function spawn() {
@@ -84,6 +126,7 @@
   }
   function cell(x, y, c, alpha) { g.globalAlpha = alpha == null ? 1 : alpha; g.fillStyle = c; rr(g, x + 1, y + 1, SZ - 2, SZ - 2, 5); g.fill(); g.fillStyle = 'rgba(255,255,255,.35)'; rr(g, x + 4, y + 4, SZ - 8, 6, 3); g.fill(); g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(x + 2, y + SZ - 6, SZ - 4, 4); g.globalAlpha = 1; }
   function draw() {
+    if (V.ready) return draw3();
     A.begin();
     g.fillStyle = '#ffffff'; g.strokeStyle = '#d5dcea'; g.lineWidth = 4; rr(g, BX - 8, BY - 8, CW * SZ + 16, CH * SZ + 16, 14); g.fill(); g.stroke();
     g.strokeStyle = '#eef2f8'; g.lineWidth = 1; for (let x = 1; x < CW; x++) { g.beginPath(); g.moveTo(BX + x * SZ, BY); g.lineTo(BX + x * SZ, BY + CH * SZ); g.stroke(); } for (let y = 1; y < CH; y++) { g.beginPath(); g.moveTo(BX, BY + y * SZ); g.lineTo(BX + CW * SZ, BY + y * SZ); g.stroke(); }

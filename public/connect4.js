@@ -20,10 +20,59 @@
   const g = A.g;
   let G = null;
 
+  /* ---------- 3D board on a table ---------- */
+  const V = L.g3d(A, { sky: ['#f4e9dc', '#efe2d1'], fog: false, shadowSize: 8, hemi: 0.9 });
+  const D3 = {}, TY = 1.0;
+  const CX = (c) => c - (COLS - 1) / 2, RY = (r) => TY + (ROWS - 1 - r) + 0.62;
+  V.onReady((V) => {
+    const T = V.T, sc = V.scene;
+    // room
+    const wall = V.tex(128, 128, (c) => { c.fillStyle = '#f2e6d6'; c.fillRect(0, 0, 128, 128); c.fillStyle = '#eadbc6'; for (let x = 0; x < 128; x += 32) c.fillRect(x, 0, 14, 128); }, [12, 4]);
+    const w = new T.Mesh(new T.PlaneGeometry(40, 14), new T.MeshStandardMaterial({ map: wall })); w.position.set(0, 7, -6); w.receiveShadow = true; sc.add(w);
+    const fl = V.tex(128, 128, (c) => { for (let i = 0; i < 4; i++) { c.fillStyle = ['#a8764a', '#9c6c42', '#b07d50', '#a37148'][i]; c.fillRect(0, i * 32, 128, 32); c.fillStyle = 'rgba(0,0,0,.12)'; c.fillRect(0, i * 32 + 31, 128, 1); } }, [10, 10]);
+    const f = new T.Mesh(new T.PlaneGeometry(40, 30), new T.MeshStandardMaterial({ map: fl, roughness: 0.5 })); f.rotation.x = -Math.PI / 2; f.position.y = -1.2; f.receiveShadow = true; sc.add(f);
+    V.box(10, 0.3, 4, V.M('#7a4f2c', { roughness: 0.45 }), 0, TY - 0.15, 0.4);
+    for (const [x, z] of [[-4.6, -1.3], [4.6, -1.3], [-4.6, 2.1], [4.6, 2.1]]) V.box(0.3, 2.2, 0.3, '#5e3c20', x, TY - 1.4, z);
+    V.box(3, 4, 0.3, '#ffffff', -9, 5, -5.8, sc, false); V.box(2.6, 3.6, 0.32, '#8fc3e8', -9, 5, -5.75, sc, false); // window
+    V.box(2.2, 1.6, 0.1, '#2f6bff', 8, 6, -5.85, sc, false); // poster
+    const plant = V.cyl(0.5, 0.4, 0.9, '#d0784a', 7.5, -0.75, -3.5); const lf = new T.Mesh(new T.IcosahedronGeometry(0.9, 0), V.M('#3f8a3a', { flatShading: true })); lf.position.set(7.5, 0.5, -3.5); sc.add(lf);
+    // board: a slab with round holes
+    const shape = new T.Shape(); const bw = COLS + 0.6, bh = ROWS + 0.6;
+    shape.moveTo(-bw / 2, 0); shape.lineTo(bw / 2, 0); shape.lineTo(bw / 2, bh); shape.lineTo(-bw / 2, bh); shape.lineTo(-bw / 2, 0);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const h = new T.Path(); h.absarc(CX(c), RY(r) - TY - 0.62 + 0.8, 0.4, 0, Math.PI * 2, true); shape.holes.push(h); }
+    const bg = new T.ExtrudeGeometry(shape, { depth: 0.36, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 2, curveSegments: 18 });
+    const board = new T.Mesh(bg, V.M('#2f6bff', { roughness: 0.3, metalness: 0.1 })); board.position.set(0, TY + 0.02 - 0.18, -0.18); board.castShadow = board.receiveShadow = true; sc.add(board);
+    for (const x of [-bw / 2 - 0.1, bw / 2 + 0.1]) V.box(0.25, 1, 1.2, '#1f4fd1', x, TY + 0.3, 0);
+    // discs
+    const dg = new T.CylinderGeometry(0.41, 0.41, 0.24, 28); dg.rotateX(Math.PI / 2);
+    const red = V.M('#ff4d5e', { roughness: 0.35 }), yel = V.M('#ffc92e', { roughness: 0.35 });
+    D3.mk = (p) => { const m = new T.Mesh(dg, p === 1 ? red : yel); m.castShadow = true; const ring = new T.Mesh(new T.TorusGeometry(0.28, 0.035, 8, 24), V.M(p === 1 ? '#d9324a' : '#e0a800')); ring.position.z = 0.12; m.add(ring); const r2 = ring.clone(); r2.position.z = -0.12; m.add(r2); sc.add(m); return m; };
+    D3.discs = {}; D3.hover = D3.mk(1); D3.hover.material = V.M('#ff4d5e', { transparent: true, opacity: 0.6 }); D3.fall = null;
+    for (let c = 0; c < COLS; c++) { const n = V.sprite(String(c + 1), 0.6, 0.6, null, '#66708f'); n.position.set(CX(c), TY + bh + 0.9, 0); }
+    V.camera.position.set(0, 6.0, 11.5); V.camera.lookAt(0, 4.0, 0); V.follow = new T.Vector3(0, 2, 0);
+    A.toWorld = (e) => { const p = V.pick(e, { z: 0 }); return p ? { x: BX + (p.x + COLS / 2) * SZ, y: BY } : { x: -999, y: 0 }; };
+  });
+  function draw3() {
+    const T = V.T;
+    // placed discs
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const k = r * COLS + c, p = G.b[r][c];
+      let m = D3.discs[k];
+      if (p && (!m || m.userData.p !== p)) { if (m) V.scene.remove(m); m = D3.discs[k] = D3.mk(p); m.userData.p = p; }
+      if (!p && m) { V.scene.remove(m); delete D3.discs[k]; m = null; }
+      if (m) { m.position.set(CX(c), RY(r), 0); const win = G.win && G.win.cells.some(([a, b]) => a === r && b === c); m.scale.setScalar(win ? 1 + Math.sin(G.t * 8) * 0.08 : 1); m.rotation.z = win ? G.t * 3 : 0; }
+    }
+    if (G.drop) { if (!D3.fall || D3.fall.userData.p !== G.drop.p) { if (D3.fall) V.scene.remove(D3.fall); D3.fall = D3.mk(G.drop.p); D3.fall.userData.p = G.drop.p; } D3.fall.visible = true; D3.fall.position.set(CX(G.drop.c), TY + ROWS - 0.5 - (G.drop.y - BY) / SZ + 0.12, 0); }
+    else if (D3.fall) D3.fall.visible = false;
+    D3.hover.visible = G.turn === 1 && !G.win && !G.drop; D3.hover.position.set(CX(G.hover), TY + ROWS + 1.25 + Math.sin(G.t * 4) * 0.08, 0);
+    // a new game: clear any discs left from the last board
+    V.frame();
+  }
+
   function start(lv) {
     S = DB.load();
     G = { lv: LEVELS[lv], b: Array.from({ length: ROWS }, () => Array(COLS).fill(0)), turn: 1, hover: 3, drop: null, win: null, botT: 0, t: 0, moves: 0 };
-    A.play(); A.run(step); hud();
+    A.play(); V.init(); A.run(step); hud();
   }
   A.onAgain = () => start(G.lv.id);
   function hud() { $('#c4-turn').textContent = G.win ? (G.win.p === 1 ? 'You win!' : G.win.p === 2 ? 'Bot wins' : 'Draw') : G.turn === 1 ? '🔴 Your turn' : '🟡 Bot is thinking...'; $('#c4-lvl').textContent = `${G.lv.name} bot`; }
@@ -93,6 +142,7 @@
     if (glow) { g.strokeStyle = '#ffffff'; g.lineWidth = 5; g.beginPath(); g.arc(x, y, SZ * 0.43 + Math.sin(G.t * 8) * 2, 0, 7); g.stroke(); }
   }
   function draw() {
+    if (V.ready) return draw3();
     A.begin();
     if (G.turn === 1 && !G.win && !G.drop) { g.globalAlpha = 0.5 + Math.sin(G.t * 5) * 0.15; disc(BX + G.hover * SZ + SZ / 2, BY - SZ / 2 - 6, 1); g.globalAlpha = 1; }
     if (G.drop) disc(BX + G.drop.c * SZ + SZ / 2, G.drop.y + SZ / 2, G.drop.p);
