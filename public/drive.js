@@ -62,6 +62,9 @@
   const rand = (a, b) => a + Math.random() * (b - a);
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   const ord = (n) => n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
+  // Brookhaven-style lots: three houses to claim and a supermarket (see drive-rp.js)
+  const RP_LOTS = { houses: [[1, 1, 1, 0], [1, 1, 1, 1], [1, 1, 0, 1]], market: [2, 1, 0, 1] };
+  const RPX = () => window.LSPDriveRP && window.LSPDriveRP.ready ? window.LSPDriveRP : null;
   const lotC = (bx, bz, lx, lz) => [RX(bx) + HALF + 14.5 + lx * 29, RX(bz) + HALF + 14.5 + lz * 29];
   const PARKS = ['3,0', '0,4'];
   const HIDEOUTS = [[2, 4], [4, 1], [0, 2]].map(([a, b]) => { const [x, z] = lotC(a, b, 0, 0); return { x, z }; });
@@ -566,7 +569,7 @@
     }
     const roofGeos = [], walkGeos = [], parkGeos = [], trees = [], lamps = [];
     const R = LSPG.rng(20260);
-    const special = new Set([...HIDEOUTS.map((h) => h.x + ',' + h.z), GARAGE.x + ',' + GARAGE.z]);
+    const special = new Set([...HIDEOUTS.map((h) => h.x + ',' + h.z), GARAGE.x + ',' + GARAGE.z, ...[...RP_LOTS.houses, RP_LOTS.market].map((l) => lotC(...l).join(','))]);
     for (let bx = 0; bx < NB; bx++) for (let bz = 0; bz < NB; bz++) {
       const x0 = RX(bx) + HALF, z0 = RX(bz) + HALF, S = CELL - ROAD, cx = x0 + S / 2, cz = z0 + S / 2;
       const sw = new T.BoxGeometry(S, 0.16, S); sw.translate(cx, 0.08, cz); walkGeos.push(sw);
@@ -669,6 +672,7 @@
       const c = new T.Mesh(new T.ConeGeometry(70 + Math.random() * 70, h, 7), M('#6d8f7a', { flatShading: true })); c.position.set(Math.cos(a) * r, h / 2 - 4, Math.sin(a) * r); scene.add(c);
     }
     initFx();
+    if (window.LSPDriveRP) try { window.LSPDriveRP.build({ T, scene, camera, sun, M, box, canvasTex, textSprite, person, puff, addCol, lotC, RP_LOTS, G, getP: () => P, getF: () => F, K, TIN, pop, sfx }); } catch (e) { console.error('roleplay world', e); }
     buildMiniBase();
     addEventListener('resize', resize);
   }
@@ -893,7 +897,7 @@
   function closeModal() { LSPG.closeModal('drive-modal'); }
   let popT = 0;
   function pop(text) { const e = $('#d-pop'); e.textContent = text; e.classList.add('on'); clearTimeout(popT); popT = setTimeout(() => e.classList.remove('on'), 1800); }
-  function reward(n, why) { const got = Wallet.add(n); G.earned += got; SV.stats.earned += got; save(); sfx('cash'); pop(`+${got.toLocaleString()} ⭐ ${why}`); return got; }
+  function reward(n, why) { if (RPX()) RPX().addCash(Math.round(n / 2)); const got = Wallet.add(n); G.earned += got; SV.stats.earned += got; save(); sfx('cash'); pop(`+${got.toLocaleString()} ⭐ ${why}`); return got; }
 
   function setPlayerVehicle() {
     if (P) { scene.remove(P.m.g); }
@@ -1058,13 +1062,14 @@
     G.earned = 0; G.on = true; G.cam = 'chase';
     respawn();
     pop(MP.want ? 'Joining your friend…' : 'Walk to your ride and get in');
-    mpBegin();
+    mpBegin(); if (RPX()) RPX().enter();
     resize();
     $('#d-mute').textContent = LSPG.muted && LSPG.muted() ? '🔇' : '🔊';
     cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(frame);
   }
   function stopCity() {
     if (!G.on) return;
+    if (RPX()) RPX().leave();
     G.on = false; cancelAnimationFrame(raf); stopEngine(); closeModal();
     for (const k in K) K[k] = false; for (const k in TIN) TIN[k] = false;
     if (G.race) endRace(true);
@@ -1084,6 +1089,7 @@
 
   function action() {
     if (!G.on || G.paused || G.over) return;
+    if (G.mode === 'foot' && RPX() && RPX().use()) return;
     if (G.mode === 'foot') {
       if (Math.hypot(F.x - P.x, F.z - P.z) < (P.s.bike ? 2.6 : 3.6)) {
         G.mode = 'drive'; F.m.visible = false; P.m.driver.visible = true; sfx('door'); startEngine(); G.camH = P.h;
@@ -1123,6 +1129,7 @@
   addEventListener('blur', () => { for (const k in K) K[k] = false; });
   $('#drive-cv').addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch' && !$('#s-drive').classList.contains('touch')) $('#s-drive').classList.add('touch'); });
   function input() {
+    if (RPX() && RPX().blocked()) return { thr: 0, brk: 0, steer: 0, hand: G.mode === 'drive', nitro: false };
     const l = K.KeyA || K.ArrowLeft || TIN.left, r = K.KeyD || K.ArrowRight || TIN.right;
     const inp = { thr: K.KeyW || K.ArrowUp || TIN.gas ? 1 : 0, brk: K.KeyS || K.ArrowDown || TIN.brake ? 1 : 0, steer: (r ? 1 : 0) - (l ? 1 : 0), hand: !!K.Space, nitro: !!(K.ShiftLeft || K.ShiftRight || TIN.nitro) };
     // on a phone, braking hard while steering at speed pulls the handbrake for a drift
@@ -1268,6 +1275,7 @@
       if (P.nOn && !G.nitroSnd) { G.nitroSnd = true; sfx('nitro', { volume: 0.6 }); } if (!P.nOn) G.nitroSnd = false;
       if (P.hp < P.s.hp * 0.35 && Math.random() < dt * 10) puff(P.x, P.y + 1.1, P.z, P.hp < P.s.hp * 0.15 ? '#3a3036' : '#9a9aa0', 0.9, 1.4, rand(-0.4, 0.4), 1.6, rand(-0.4, 0.4), 1.4, 0.5);
     }
+    if (RPX()) RPX().tick(dt);
     // keep traffic around the player
     for (const tr of G.traffic) if (Math.hypot(tr.x - me.x, tr.z - me.z) > 260 && Math.random() < dt) placeTraffic(tr, true);
   }
@@ -1317,6 +1325,7 @@
     updFx(dt);
     updCam(dt);
     sun.position.set(me.x + 60, 110, me.z + 40); sun.target.position.set(me.x, 0, me.z);
+    if (RPX()) RPX().frame(dt || 0.016);
     renderer.render(scene, camera);
     // audio
     if (engine) {
@@ -1338,6 +1347,8 @@
       const p = P.m.seat.clone(); s.localToWorld(p); const l = P.m.look.clone(); s.localToWorld(l);
       camera.position.copy(p); camera.lookAt(l); fov = 70 + Math.min(12, Math.abs(fwdSpeed(P)) * 0.15) + (P.nOn ? 6 : 0);
       camPos.init = false;
+    } else if (G.mode === 'foot' && RPX() && RPX().cam(camera, dt)) {
+      camPos.init = false; fov = 55;
     } else {
       const b = G.mode === 'drive' ? P : F, drive = G.mode === 'drive';
       const sp = drive ? Math.abs(fwdSpeed(P)) : 0;
@@ -1380,6 +1391,7 @@
     if (!drive && Math.hypot(F.x - P.x, F.z - P.z) < (P.s.bike ? 2.6 : 3.6)) pr = LSPG.isTouch() ? 'Tap 🚪 to get in' : 'Press E to get in';
     else if (drive && Math.abs(me.x - GARAGE.x) < 9 && Math.abs(me.z - GARAGE.z) < 9) pr = P.hp < P.s.hp ? '🔧 Repairing… stay stopped' : '🔧 Garage · switch rides and upgrade from the pause menu';
     else if (G.hidden && G.heat) pr = '🅷 Stay still to hide';
+    if (!drive && RPX() && (!pr || RPX().inside())) { const rp = RPX().prompt(); if (rp) pr = rp; }
     $('#d-prompt').textContent = pr;
     // race board
     if (G.race) {
