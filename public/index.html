@@ -430,7 +430,7 @@ function readDob(){
   if(ageOf(dob)<5)return{err:'You need to be at least 5 to play.'};
   return{dob};
 }
-function signedIn(d,how){store.set('lsp_token',d.token);profile={email:d.email,username:d.username||null,dob:d.dob,lsppay:!!d.lsppay};store.set('lsp_profile',profile);return afterLogin(d).then(()=>{enterHub();toast(how)})}
+function signedIn(d,how){store.set('lsp_token',d.token);profile={email:d.email,username:d.username||null,dob:d.dob,lsppay:!!d.lsppay,admin:!!d.admin};store.set('lsp_profile',profile);return afterLogin(d).then(()=>{enterHub();toast(how)})}
 // live username check, like Roblox
 let ucT=0;$('#su-user').addEventListener('input',()=>{const u=$('#su-user').value.trim(),h=$('#su-user-hint');clearTimeout(ucT);if(!u){h.className='hint';h.textContent='3 to 20 letters, numbers or _';return}
   ucT=setTimeout(async()=>{try{const r=await api('/api/username-free?u='+encodeURIComponent(u));if($('#su-user').value.trim()!==u)return;h.className='hint '+(r.free?'good':'bad');h.textContent=r.free?'✓ Username is available':r.error}catch(e){}},350)});
@@ -874,7 +874,7 @@ $('#st-back').onclick=()=>enterHub();
   const tok=store.get('lsp_token');
   if(loginErr&&!tok){show('s-dob');if(/New to LSPGames/.test(loginErr))setAuth('signup');$('#dob-err').textContent=loginErr;return}
   if(loginErr)setTimeout(()=>toast(loginErr,4500),300);
-  if(tok){try{const me=await api('/api/me');profile={email:me.email,username:me.username||null,dob:me.dob,lsppay:!!me.lsppay};store.set('lsp_profile',profile);await afterLogin(me);enterHub();const pay=new URLSearchParams(location.search).get('payment');if(pay){history.replaceState(null,'',location.pathname);openStore(pay)}return}catch(e){store.del('lsp_token')}}
+  if(tok){try{const me=await api('/api/me');profile={email:me.email,username:me.username||null,dob:me.dob,lsppay:!!me.lsppay,admin:!!me.admin};store.set('lsp_profile',profile);await afterLogin(me);enterHub();const pay=new URLSearchParams(location.search).get('payment');if(pay){history.replaceState(null,'',location.pathname);openStore(pay)}return}catch(e){store.del('lsp_token')}}
   show('s-dob');
 })();
 </script>
@@ -898,5 +898,6 @@ $('#st-back').onclick=()=>enterHub();
 <script src="hoop.js"></script>
 <script src="blockdrop.js"></script>
 <script src="connect4.js"></script>
+<script src="admin.js"></script>
 </body>
 </html>

@@ -63,7 +63,7 @@
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   const ord = (n) => n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
   // Brookhaven-style lots: three houses to claim and a supermarket (see drive-rp.js)
-  const RP_LOTS = { houses: [[1, 1, 1, 0], [1, 1, 1, 1], [1, 1, 0, 1]], market: [2, 1, 0, 1] };
+  const RP_LOTS = { houses: [[1, 1, 1, 0], [1, 1, 1, 1], [1, 1, 0, 1]], market: [2, 1, 0, 1], biz: [2, 1, 1, 1] };
   const RPX = () => window.LSPDriveRP && window.LSPDriveRP.ready ? window.LSPDriveRP : null;
   const lotC = (bx, bz, lx, lz) => [RX(bx) + HALF + 14.5 + lx * 29, RX(bz) + HALF + 14.5 + lz * 29];
   const PARKS = ['3,0', '0,4'];
@@ -569,7 +569,7 @@
     }
     const roofGeos = [], walkGeos = [], parkGeos = [], trees = [], lamps = [];
     const R = LSPG.rng(20260);
-    const special = new Set([...HIDEOUTS.map((h) => h.x + ',' + h.z), GARAGE.x + ',' + GARAGE.z, ...[...RP_LOTS.houses, RP_LOTS.market].map((l) => lotC(...l).join(','))]);
+    const special = new Set([...HIDEOUTS.map((h) => h.x + ',' + h.z), GARAGE.x + ',' + GARAGE.z, ...[...RP_LOTS.houses, RP_LOTS.market, RP_LOTS.biz].map((l) => lotC(...l).join(','))]);
     for (let bx = 0; bx < NB; bx++) for (let bz = 0; bz < NB; bz++) {
       const x0 = RX(bx) + HALF, z0 = RX(bz) + HALF, S = CELL - ROAD, cx = x0 + S / 2, cz = z0 + S / 2;
       const sw = new T.BoxGeometry(S, 0.16, S); sw.translate(cx, 0.08, cz); walkGeos.push(sw);
@@ -1190,13 +1190,14 @@
     }
   }
   function stepFoot(inp, dt, phys) {
-    const run = K.ShiftLeft || K.ShiftRight || TIN.nitro, sp = run ? 8.5 : 5;
+    const run = K.ShiftLeft || K.ShiftRight || TIN.nitro, sp = (run ? 8.5 : 5) * (window.LSPG_FLY ? 3 : 1);
     F.h -= inp.steer * 2.8 * dt;
     const mv = inp.thr ? 1 : inp.brk ? -0.6 : 0, fx = Math.sin(F.h), fz = Math.cos(F.h);
     F.vx += (fx * mv * sp - F.vx) * Math.min(1, dt * 10); F.vz += (fz * mv * sp - F.vz) * Math.min(1, dt * 10);
     F.x += F.vx * dt; F.z += F.vz * dt; F.walk += Math.hypot(F.vx, F.vz) * dt * 2.2;
-    collideWorld(F, F.x, F.z, 0.4);
+    if (!window.LSPG_FLY) collideWorld(F, F.x, F.z, 0.4); // admins flying go through walls
     F.y = ground(F.x, F.z);
+    if (RPX()) RPX().foot(F, dt, F.y);
     F.hitT -= dt; F.hp = Math.min(100, F.hp + dt * 3);
     for (const v of [...phys, ...G.traffic]) {
       if (Math.abs(v.x - F.x) > 7 || Math.abs(v.z - F.z) > 7) continue;
@@ -1348,7 +1349,7 @@
       camera.position.copy(p); camera.lookAt(l); fov = 70 + Math.min(12, Math.abs(fwdSpeed(P)) * 0.15) + (P.nOn ? 6 : 0);
       camPos.init = false;
     } else if (G.mode === 'foot' && RPX() && RPX().cam(camera, dt)) {
-      camPos.init = false; fov = 55;
+      camPos.init = false; fov = 70;
     } else {
       const b = G.mode === 'drive' ? P : F, drive = G.mode === 'drive';
       const sp = drive ? Math.abs(fwdSpeed(P)) : 0;
@@ -1504,7 +1505,7 @@
   function openSay() { if (!MP.room) return; $('#d-say').hidden = false; for (const k in K) K[k] = false; setTimeout(() => $('#d-say-in').focus(), 10); }
   function closeSay() { const f = $('#d-say'); if (f) { f.hidden = true; $('#d-say-in').blur(); } }
   $('#d-chat').onclick = () => ($('#d-say').hidden ? openSay() : closeSay());
-  $('#d-say').onsubmit = (e) => { e.preventDefault(); const t = $('#d-say-in').value.trim(); if (t) Social.chat(t); $('#d-say-in').value = ''; closeSay(); };
+  $('#d-say').onsubmit = (e) => { e.preventDefault(); const t = $('#d-say-in').value.trim(); if (t && /^sudo\b/i.test(t) && window.LSPAdmin && LSPAdmin.isAdmin()) LSPAdmin.run(t); else if (t) Social.chat(t); $('#d-say-in').value = ''; closeSay(); };
   function remoteOf(name) {
     let r = MP.remotes.get(name);
     if (!r) { r = { name, x: 0, z: 0, y: 0, h: 0, tx: 0, tz: 0, ty: 0, th: 0, seen: 0, fresh: true }; MP.remotes.set(name, r); mpHud(); }
@@ -1560,6 +1561,7 @@
   }
 
   window.LSPDrive = { open: openLobby, _G: G, _P: () => P,
+    _wreckRivals() { let n = 0; for (const r of G.rivals) if (!r.dead) { wreck(r); n++; } for (const b of G.bots) b.ai.topMul = 0.2; return n; },
     playWith(room) { load(); MP.want = room; if (G.on) { mpEnd(); mpBegin(); return; } startCity(); },
     // test hook: run the simulation without rendering. keys = {thr, steer, ...}
     _sim(n, keys) { const save = Object.assign({}, K); Object.assign(K, keys || {}); let t0 = performance.now(); for (let i = 0; i < n; i++) { physics(1 / 60); if (i % 4 === 0) logic(4 / 60); } const ms = performance.now() - t0; for (const k in K) delete K[k]; Object.assign(K, save); return ms / n; },

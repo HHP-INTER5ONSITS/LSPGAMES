@@ -205,8 +205,9 @@ app.post('/api/login', async (req, res) => {
     return res.status(429).json({ error: 'Too many tries. Wait 15 minutes and try again.' });
   const id = idOfName(u), user = UNAME_RE.test(u) ? await db.getUser(id) : null;
   if (!user || !checkPass(p, user.pass)) return res.status(400).json({ error: 'Wrong username or password.' });
+  if (user.banned) return res.status(403).json({ error: 'This account is banned.' });
   const token = await startSession(id, user.dob);
-  res.json({ token, email: id, username: user.username || u, dob: user.dob, points: user.points, migrated: true, lsppay: !!user.lsppay });
+  res.json({ token, email: id, username: user.username || u, dob: user.dob, points: user.points, migrated: true, lsppay: !!user.lsppay, admin: !!user.admin });
 });
 
 async function auth(req, res, next) {
@@ -214,14 +215,51 @@ async function auth(req, res, next) {
     const m = /^Bearer (\w+)$/.exec(req.get('Authorization') || '');
     const s = m && (await db.getSession(m[1]));
     if (!s) return res.status(401).json({ error: 'Please sign in again.' });
-    req.session = s; req.token = m[1];
+    const u = await db.getUser(s.email);
+    if (u && u.banned) return res.status(403).json({ error: 'This account is banned.' });
+    req.session = s; req.token = m[1]; req.user = u;
     next();
   } catch (e) { next(e); }
 }
 
 app.get('/api/me', auth, async (req, res) => {
   const u = await db.getUser(req.session.email);
-  res.json({ email: req.session.email, username: (u && u.username) || null, dob: req.session.dob, points: u ? u.points : 0, migrated: !!(u && (u.migrated || u.username)), lsppay: !!(u && u.lsppay) });
+  res.json({ email: req.session.email, username: (u && u.username) || null, dob: req.session.dob, points: u ? u.points : 0, migrated: !!(u && (u.migrated || u.username)), lsppay: !!(u && u.lsppay), admin: !!(u && u.admin) });
+});
+
+/* ---------------- Admin account ----------------
+   The admin username and password come from environment variables
+   (ADMIN_USERNAME, default "admin", and ADMIN_PASSWORD), never from the code,
+   so nobody reading the repo can sign in as admin. */
+const ADMIN_NAME = String(process.env.ADMIN_USERNAME || 'admin').trim();
+async function seedAdmin() {
+  const pw = process.env.ADMIN_PASSWORD;
+  if (!pw) return console.log('Admin account: off (set ADMIN_PASSWORD to turn it on).');
+  if (!UNAME_RE.test(ADMIN_NAME)) return console.warn('ADMIN_USERNAME must be 3-20 letters, numbers or _.');
+  const id = idOfName(ADMIN_NAME), u = await db.getUser(id);
+  if (!u) await db.upsertUser(id, '2000-01-01');
+  const fields = { username: ADMIN_NAME, uname: ADMIN_NAME.toLowerCase(), admin: true, banned: false };
+  if (!u || !checkPass(pw, u.pass)) fields.pass = hashPass(pw);
+  await db.setUserFields(id, fields);
+  console.log(`Admin account: ${ADMIN_NAME} is ready.`);
+}
+function adminOnly(req, res, next) { if (!req.user || !req.user.admin) return res.status(403).json({ error: 'Admins only.' }); next(); }
+app.post('/api/admin/points', auth, adminOnly, async (req, res) => {
+  const n = Math.max(1, Math.min(10000000, Math.floor(Number(req.body.amount) || 1000)));
+  const r = await db.addPoints(req.session.email, n);
+  const u = await db.getUser(req.session.email);
+  res.json({ ok: true, added: n, points: u ? u.points : (r && r.points) || 0 });
+});
+app.post('/api/admin/ban', auth, adminOnly, async (req, res) => {
+  const name = String(req.body.username || '').trim(), ban = req.body.ban !== false;
+  if (!UNAME_RE.test(name)) return res.status(400).json({ error: 'Type a username.' });
+  let u = await db.getUser(idOfName(name)); if (!u) u = await db.findByUname(name.toLowerCase());
+  if (!u) return res.status(404).json({ error: `No player called ${name}.` });
+  if (u.admin) return res.status(400).json({ error: "Admins can't be banned." });
+  const id = u.email || idOfName(name);
+  await db.setUserFields(id, { banned: !!ban });
+  if (ban && FR.kick) FR.kick(id);
+  res.json({ ok: true, username: u.username || name, banned: !!ban });
 });
 app.post('/api/logout', auth, async (req, res) => { await db.deleteSession(req.token); res.json({ ok: true }); });
 
@@ -656,6 +694,7 @@ app.use((err, req, res, next) => { console.error(err); res.status(500).json({ er
 
 DBM.connect().then((store) => {
   db = store;
+  seedAdmin().catch((e) => console.error('Admin setup failed:', e.message));
   const httpServer = app.listen(PORT, '0.0.0.0', () => {
     console.log(`LSPGames running on port ${PORT}`);
     console.log(`Email provider: ${provider() || (DEMO_MODE ? 'none (demo mode: codes shown on screen)' : 'NONE CONFIGURED')}`);

@@ -143,6 +143,7 @@ module.exports = function friends(app, { getDb, auth, allow, ipLog, nameProblem,
           const db = getDb(), s = await db.getSession(String(m.token || ''));
           if (!s) { ws.send(JSON.stringify({ t: 'auth', ok: false })); return ws.close(); }
           user = await db.getUser(s.email); if (!user) return ws.close();
+          if (user.banned) { ws.send(JSON.stringify({ t: 'auth', ok: false, banned: true })); return ws.close(); }
           id = s.email; clearTimeout(kill);
           let o = online.get(id); const wasOff = !o;
           if (!o) online.set(id, (o = { socks: new Set(), game: null, room: null }));
@@ -191,5 +192,7 @@ module.exports = function friends(app, { getDb, auth, allow, ipLog, nameProblem,
     // keep idle connections alive through Render's proxy
     setInterval(() => { for (const ws of wss.clients) try { ws.ping(); } catch (_) {} }, 25000).unref();
   }
-  return { attach, cleanChat };
+  // throw a banned player out of every open connection
+  function kick(id) { const o = online.get(id); if (o) for (const w of o.socks) { try { w.send(JSON.stringify({ t: 'banned' })); w.close(); } catch {} } }
+  return { attach, cleanChat, kick };
 };

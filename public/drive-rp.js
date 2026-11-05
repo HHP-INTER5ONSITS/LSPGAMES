@@ -43,6 +43,7 @@
   const HOUSE_COLORS = [['#f6ead6', '#b5533c'], ['#dff0ff', '#2f5fa8'], ['#f3e1ff', '#6a3fa0']];
   const DAY_MIN = 1440, MIN_PER_SEC = 2;
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v), fmt$ = (n) => '$' + Math.floor(n).toLocaleString();
+  const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 
   let E = null, S = null, DB = null, V = null, ui = false, act = null, cart = [], shift = null, near = null, tick = 0;
   const OBJ = [], BUILD = [], D3 = {};
@@ -61,83 +62,111 @@
     };
   }
 
-  /* ---------- buildings ---------- */
+  /* ---------- buildings: closed inside, like Brookhaven ---------- */
+  const Y0 = 0.17, FH = 3.2; // floor level and height of one storey
   function building(o, V2, group) {
     const T = E.T, walls = new T.Group(); group.add(walls);
-    const H = o.h || 3, t = 0.2, wm = E.M(o.wall, { roughness: 0.85 }), trim = E.M(o.trim || '#ffffff');
-    const fl = new T.Mesh(new T.PlaneGeometry(o.x1 - o.x0, o.z1 - o.z0), E.M(o.floor || '#d9b58a', { roughness: 0.6 })); fl.rotation.x = -Math.PI / 2; fl.position.set((o.x0 + o.x1) / 2, 0.17, (o.z0 + o.z1) / 2); fl.receiveShadow = true; group.add(fl);
+    const H = o.h || 3, t = 0.25, wm = E.M(o.wall, { roughness: 0.85 }), trim = E.M(o.trim || '#ffffff'), glass = E.M('#9fd3f2', { roughness: 0.05, metalness: 0.3, emissive: '#1d3550', emissiveIntensity: 0.25 });
+    const fl = new T.Mesh(new T.PlaneGeometry(o.x1 - o.x0, o.z1 - o.z0), E.M(o.floor || '#d9b58a', { roughness: 0.6 })); fl.rotation.x = -Math.PI / 2; fl.position.set((o.x0 + o.x1) / 2, Y0, (o.z0 + o.z1) / 2); fl.receiveShadow = true; group.add(fl);
     const ox = group.position.x, oz = group.position.z;
     const seg = (a0, a1, fixed, horiz) => {
       const len = a1 - a0; if (len < 0.05) return;
-      horiz ? V2.box(len, H, t, wm, (a0 + a1) / 2, H / 2 + 0.17, fixed, walls) : V2.box(t, H, len, wm, fixed, H / 2 + 0.17, (a0 + a1) / 2, walls);
-      horiz ? V2.box(len, 0.12, t + 0.04, trim, (a0 + a1) / 2, 0.23, fixed, walls, false) : V2.box(t + 0.04, 0.12, len, trim, fixed, 0.23, (a0 + a1) / 2, walls, false);
+      horiz ? V2.box(len, H, t, wm, (a0 + a1) / 2, H / 2 + Y0, fixed, walls) : V2.box(t, H, len, wm, fixed, H / 2 + Y0, (a0 + a1) / 2, walls);
+      horiz ? V2.box(len, 0.14, t + 0.06, trim, (a0 + a1) / 2, Y0 + 0.07, fixed, walls, false) : V2.box(t + 0.06, 0.14, len, trim, fixed, Y0 + 0.07, (a0 + a1) / 2, walls, false);
       horiz ? E.addCol(ox + a0, oz + fixed - t / 2, ox + a1, oz + fixed + t / 2) : E.addCol(ox + fixed - t / 2, oz + a0, ox + fixed + t / 2, oz + a1);
     };
-    const wall = (a0, a1, fixed, horiz, gaps = []) => { let cur = a0; for (const [g0, g1] of gaps.slice().sort((p, q) => p[0] - q[0])) { seg(cur, g0, fixed, horiz); cur = g1; } seg(cur, a1, fixed, horiz); };
+    const lintel = (g0, g1, fixed, horiz) => { const top = Y0 + 2.6, hh = H + Y0 - top; if (hh < 0.05) return; horiz ? V2.box(g1 - g0, hh, t, wm, (g0 + g1) / 2, top + hh / 2, fixed, walls) : V2.box(t, hh, g1 - g0, wm, fixed, top + hh / 2, (g0 + g1) / 2, walls); };
+    const wall = (a0, a1, fixed, horiz, gaps = []) => { let cur = a0; for (const [g0, g1] of gaps.slice().sort((p, q) => p[0] - q[0])) { seg(cur, g0, fixed, horiz); lintel(g0, g1, fixed, horiz); cur = g1; } seg(cur, a1, fixed, horiz); };
     for (const w of o.walls) wall(w[0], w[1], w[2], w[3] === 'h', w[4] || []);
+    for (const [a, fixed, horiz, y] of o.windows || []) horiz ? V2.box(1.5, 1.1, t + 0.06, glass, a, y, fixed, walls, false) : V2.box(t + 0.06, 1.1, 1.5, glass, fixed, y, a, walls, false);
+    // a ceiling so the inside feels like a room, then the roof
+    const ceil = new T.Mesh(new T.PlaneGeometry(o.x1 - o.x0, o.z1 - o.z0), E.M(o.ceiling || '#f4f1ea', { side: T.DoubleSide })); ceil.rotation.x = Math.PI / 2; ceil.position.set((o.x0 + o.x1) / 2, H + Y0 - 0.02, (o.z0 + o.z1) / 2); group.add(ceil);
     const roof = new T.Group(); group.add(roof);
-    if (o.peak) { const r = new T.Mesh(new T.ConeGeometry(Math.hypot(o.x1 - o.x0, o.z1 - o.z0) * 0.55, 2.6, 4), E.M(o.roof)); r.rotation.y = Math.PI / 4; r.scale.set(1, 1, (o.z1 - o.z0) / (o.x1 - o.x0)); r.position.set((o.x0 + o.x1) / 2, H + 1.5, (o.z0 + o.z1) / 2); r.castShadow = true; roof.add(r); }
-    else V2.box(o.x1 - o.x0 + 0.8, 0.35, o.z1 - o.z0 + 0.8, E.M(o.roof), (o.x0 + o.x1) / 2, H + 0.35, (o.z0 + o.z1) / 2, roof);
+    if (o.peak) { const r = new T.Mesh(new T.ConeGeometry(Math.hypot(o.x1 - o.x0, o.z1 - o.z0) * 0.56, 2.8, 4), E.M(o.roof)); r.rotation.y = Math.PI / 4; r.scale.set(1, 1, (o.z1 - o.z0) / (o.x1 - o.x0)); r.position.set((o.x0 + o.x1) / 2, H + Y0 + 1.4, (o.z0 + o.z1) / 2); r.castShadow = true; roof.add(r); }
+    else V2.box(o.x1 - o.x0 + 0.8, 0.4, o.z1 - o.z0 + 0.8, E.M(o.roof), (o.x0 + o.x1) / 2, H + Y0 + 0.2, (o.z0 + o.z1) / 2, roof);
     const b = { ...o, walls, roof, wx0: ox + o.x0, wx1: ox + o.x1, wz0: oz + o.z0, wz1: oz + o.z1 }; BUILD.push(b); return b;
   }
   const insideB = (b, x, z) => x > b.wx0 && x < b.wx1 && z > b.wz0 && z < b.wz1;
-  function obj(o, ox, oz) { o.x += ox; o.z += oz; if (o.spot) { o.spot.x += ox; o.spot.z += oz; } OBJ.push(o); return o; }
+  function obj(o, ox, oz) { o.x += ox; o.z += oz; OBJ.push(o); return o; }
 
-  const HOUSE = { x0: -14, x1: 2, z0: -20, z1: -6, walls: [[-14, 2, -6, 'h', [[-7, -5.6]]], [-14, 2, -20, 'h'], [-20, -6, -14, 'v'], [-20, -6, 2, 'v'], [-14, -6, -13, 'h', [[-11, -9.8]]], [-6, 2, -13, 'h', [[-3, -1.8]]], [-20, -13, -6, 'v']] };
+  /* ---------- two-storey houses ---------- */
+  const HOUSE_PRICES = [1200, 2500, 4000];
+  const HOUSE = { x0: -14, x1: 2, z0: -20, z1: -6, h: FH * 2, walls: [[-14, 2, -6, 'h', [[-7, -5.6]]], [-14, 2, -20, 'h'], [-20, -6, -14, 'v'], [-20, -6, 2, 'v']],
+    windows: [[-11, -6, 1, 1.9], [-2.5, -6, 1, 1.9], [-11, -6, 1, 5.1], [-3, -6, 1, 5.1], [-10, -20, 1, 1.9], [-2.5, -20, 1, 5.1], [-10, -20, 1, 5.1], [-10, -14, 0, 1.9], [-16, -14, 0, 5.1], [-10, 2, 0, 1.9], [-17, 2, 0, 5.1]] };
+  // inside walls and furniture you bump into, per floor, in house coordinates [x0, z0, x1, z1]
+  const FLOOR_COLS = [
+    [[-0.1, -13, 0.1, -8], [0, -8.1, 2, -7.9], [-12, -8.7, -9, -7.7], [-11.6, -12.9, -9.4, -12.3], [-5.6, -20, -0.5, -19.1], [-6.9, -20, -5.9, -19.1], [-3.9, -11.9, -2.1, -10.1]],
+    [[-7, -6.1, -5.6, -5.9], [-6.1, -20, -5.9, -9], [-6.1, -7.6, -5.9, -6], [-6, -15.1, -3, -14.9], [-1.8, -15.1, 2, -14.9], [-0.05, -13, 0.05, -8], [0, -13.05, 2, -12.95], [-13.2, -19, -11.2, -16.2], [-14, -12.3, -12.6, -11.7], [-3.8, -10.8, -2.2, -10.2], [-1.5, -19.8, -0.9, -19], [-4.8, -19.9, -4, -19.3], [-3.9, -18, -2.1, -17.1]],
+  ];
   function buildHouse(i) {
     const T = E.T, [bx, bz, lx, lz] = E.RP_LOTS.houses[i], [cx, cz] = E.lotC(bx, bz, lx, lz);
     const g = new T.Group(); g.position.set(cx + 6, 0, cz + 13); E.scene.add(g);
     const V2 = adapter(g), [wall, roof] = HOUSE_COLORS[i];
-    const b = building({ ...HOUSE, wall, roof, floor: '#c99a66', peak: true }, V2, g); b.house = i; b.group = g; b.V2 = V2;
-    V2.box(1.6, 0.04, 6, '#c9cdd4', -6.3, 0.18, -3, g, false); // path
-    for (const x of [-13, 1]) { const hedge = V2.box(1, 0.8, 0.8, '#3f8a3a', x, 0.55, -4.2, g); }
-    b.door = V2.box(1.4, 2.4, 0.1, '#8b5a33', -6.3, 1.37, -6, g); // closed until it is your house
+    const b = building({ ...HOUSE, wall, roof, floor: '#c99a66', peak: true }, V2, g); b.house = i; b.group = g; b.V2 = V2; b.price = HOUSE_PRICES[i];
+    V2.box(1.6, 0.04, 6, '#c9cdd4', -6.3, 0.18, -3, g, false);
+    for (const x of [-13, 1]) V2.box(1, 0.8, 0.8, '#3f8a3a', x, 0.55, -4.2, g);
+    V2.box(2.2, 0.15, 1.2, '#b9bec7', -6.3, 0.2, -5.2, g); // doorstep
+    b.door = V2.box(1.4, 2.4, 0.1, '#8b5a33', -6.3, Y0 + 1.2, -6, g);
     b.doorCol = { x0: g.position.x - 7, z0: g.position.z - 6.1, x1: g.position.x - 5.6, z1: g.position.z - 5.9 };
-    b.sign = V2.sprite('🏠 Free house · E to claim', 4.6, 0.8, 'rgba(22,32,61,.8)'); b.sign.position.set(-6.3, 5.6, -5.4);
-    obj({ x: -6.3, z: -4.9, r: 1.5, house: i, outside: true, label: () => (S.home === i ? '🚪 Go inside' : S.home == null ? '🏠 Claim this house (free) — E' : '🏠 Move here instead — E'), use: () => claim(i) }, g.position.x, g.position.z);
+    b.sign = V2.sprite('🏠 For sale', 4.6, 0.8, 'rgba(22,32,61,.8)'); b.sign.position.set(-6.3, FH * 2 + 3.6, -5.4);
+    // upstairs floor with a hole for the stairs, and the stairs themselves
+    const slab = E.M('#c99a66', { roughness: 0.6 }), under = E.M('#f4f1ea');
+    for (const [x0, z0, x1, z1] of [[-14, -20, 0, -6], [0, -20, 2, -13], [0, -8, 2, -6]]) { const s = V2.box(x1 - x0, 0.22, z1 - z0, slab, (x0 + x1) / 2, Y0 + FH - 0.11, (z0 + z1) / 2, g); s.receiveShadow = true; }
+    for (let k = 0; k < 10; k++) V2.box(1.7, (k + 1) * (FH / 10), 0.5, '#8b6b4a', 1, Y0 + ((k + 1) * (FH / 10)) / 2, -12.75 + k * 0.5, g);
+    V2.box(0.2, FH, 5, E.M('#f4efe6'), 0, Y0 + FH / 2, -10.5, g); // wall beside the stairs downstairs
+    V2.box(2, FH, 0.2, E.M('#f4efe6'), 1, Y0 + FH / 2, -8, g);
+    for (const [w, d, x, z] of [[0.08, 5, 0, -10.5], [2, 0.08, 1, -13]]) V2.box(w, 1, d, '#6b4a2f', x, Y0 + FH + 0.5, z, g); // upstairs railing
+    // upstairs inner walls (bedroom, bathroom)
+    const iw = E.M('#f4efe6', { roughness: 0.9 });
+    for (const [x0, z0, x1, z1] of [[-6.1, -20, -5.9, -9], [-6.1, -7.6, -5.9, -6], [-6, -15.1, -3, -14.9], [-1.8, -15.1, 2, -14.9]]) V2.box(x1 - x0, FH - 0.1, z1 - z0, iw, (x0 + x1) / 2, Y0 + FH + (FH - 0.1) / 2, (z0 + z1) / 2, g);
+    obj({ x: -6.3, z: -4.9, r: 1.5, house: i, outside: true, label: () => (S.home === i ? '🚪 Your house · walk in' : `🏠 Buy this house — ${fmt$(b.price)}`), use: () => buy(i) }, g.position.x, g.position.z);
     return b;
   }
   function furnish(b) {
     const T = E.T, V2 = b.V2, g = b.group, ox = g.position.x, oz = g.position.z, F = (b.F = {});
     const fg = new T.Group(); g.add(fg); b.furnGroup = fg;
-    const at = (x, z) => { const gr = new T.Group(); gr.position.set(x, 0.17, z); fg.add(gr); return gr; };
-    const col = (x0, z0, x1, z1) => { E.addCol(ox + x0, oz + z0, ox + x1, oz + z1); };
-    const sofa = at(-10.5, -8.2); V2.box(3, 0.45, 1, '#4f6bd8', 0, 0.35, 0, sofa); V2.box(3, 0.6, 0.25, '#4f6bd8', 0, 0.8, 0.4, sofa); col(-12, -8.7, -9, -7.7);
-    const tvs = at(-10.5, -12.6); V2.box(2.2, 0.5, 0.6, '#6b4a2f', 0, 0.25, 0, tvs); F.tv = V2.box(1.6, 0.9, 0.08, '#16181f', 0, 1.05, -0.1, tvs); F.screen = V2.box(1.5, 0.82, 0.01, E.M('#0b0d12'), 0, 1.05, -0.05, tvs, false); col(-11.6, -12.9, -9.4, -12.3);
-    F.bigtv = V2.box(2.6, 1.4, 0.08, '#16181f', -10.5, 1.57, -12.66, fg); F.console = V2.box(0.5, 0.12, 0.35, '#f2f3f5', -9.6, 0.73, -12.5, fg);
-    F.rug = V2.box(4, 0.02, 2.6, '#b5533c', -10.5, 0.2, -10.3, fg, false);
+    const at = (x, z, fl = 0) => { const gr = new T.Group(); gr.position.set(x, Y0 + fl * FH, z); fg.add(gr); return gr; };
+    const up = Y0 + FH;
+    // ---- ground floor: living room, kitchen, dining ----
+    const sofa = at(-10.5, -8.2); V2.box(3, 0.45, 1, '#4f6bd8', 0, 0.35, 0, sofa); V2.box(3, 0.6, 0.25, '#4f6bd8', 0, 0.8, 0.4, sofa); for (const x of [-1.4, 1.4]) V2.box(0.25, 0.65, 1, '#3f58c0', x, 0.5, 0, sofa);
+    const tvs = at(-10.5, -12.6); V2.box(2.2, 0.5, 0.6, '#6b4a2f', 0, 0.25, 0, tvs); F.tv = V2.box(1.6, 0.9, 0.08, '#16181f', 0, 1.05, -0.1, tvs); F.screen = V2.box(1.5, 0.82, 0.01, E.M('#0b0d12'), 0, 1.05, -0.05, tvs, false);
+    F.bigtv = V2.box(2.6, 1.4, 0.08, '#16181f', -10.5, Y0 + 1.4, -12.66, fg); F.console = V2.box(0.5, 0.12, 0.35, '#f2f3f5', -9.6, Y0 + 0.56, -12.5, fg);
+    F.rug = V2.box(4, 0.02, 2.6, '#b5533c', -10.5, Y0 + 0.02, -10.3, fg, false);
     F.shelf = at(-13.55, -10.5); V2.box(0.4, 2.2, 1.6, '#6b4a2f', 0, 1.1, 0, F.shelf); for (let k = 0; k < 12; k++) V2.box(0.22, 0.32, 0.12, ['#d61f30', '#2f6bff', '#14c79a', '#ffb31a'][k % 4], 0.06, 0.3 + Math.floor(k / 4) * 0.6, -0.6 + (k % 4) * 0.35, F.shelf, false);
-    F.plants = [[-13.3, -6.7], [1.3, -6.7], [-13.3, -19.3]].map(([x, z]) => { const p = at(x, z); V2.cyl(0.25, 0.2, 0.45, '#d0784a', 0, 0.22, 0, p); V2.box(0.6, 0.6, 0.6, '#3f8a3a', 0, 0.75, 0, p); return p; });
-    F.aquarium = at(-7, -6.6); V2.box(1.4, 0.7, 0.5, '#6b4a2f', 0, 0.35, 0, F.aquarium); V2.box(1.3, 0.7, 0.45, E.M('#5fb6ef', { transparent: true, opacity: 0.55 }), 0, 1.05, 0, F.aquarium);
-    V2.box(6.6, 0.95, 0.7, '#f2f3f5', -2.4, 0.64, -12.55, fg); V2.box(6.7, 0.06, 0.8, '#6f7685', -2.4, 1.14, -12.55, fg); col(-5.7, -12.95, 0.9, -12.15);
-    V2.box(0.9, 2, 0.75, '#e7ebf2', 1.4, 1.17, -12.5, fg); col(0.9, -12.9, 1.9, -12.1);
-    V2.box(0.8, 0.04, 0.6, '#2b3350', -1, 1.17, -12.55, fg, false);
-    F.coffee = V2.box(0.35, 0.45, 0.3, '#2b3350', -4.8, 1.39, -12.6, fg);
-    const table = at(-2.5, -8.8); V2.cyl(0.9, 0.9, 0.08, '#8b6b4a', 0, 0.78, 0, table, 24); V2.cyl(0.08, 0.12, 0.75, '#6b4a2f', 0, 0.38, 0, table, 8); col(-3.4, -9.7, -1.6, -7.9);
-    const bed = at(-12.2, -17.6); V2.box(2, 0.45, 2.8, '#8b6b4a', 0, 0.22, 0, bed); F.blanket = V2.box(1.9, 0.18, 2.1, '#8a5cff', 0, 0.54, 0.3, bed); V2.box(1.5, 0.2, 0.5, '#ffffff', 0, 0.56, -1, bed); V2.box(2, 1, 0.15, '#6b4a2f', 0, 0.6, -1.4, bed); col(-13.2, -19, -11.2, -16.2);
-    V2.box(1.6, 0.06, 0.8, '#8b6b4a', -7.4, 0.95, -15.4, fg); col(-8.2, -15.8, -6.6, -15);
-    const lap = at(-7.4, -15.5); lap.position.y = 0.98; V2.box(0.6, 0.03, 0.42, '#c3cad8', 0, 0, 0, lap); const sc = V2.box(0.54, 0.34, 0.02, E.M('#2f6bff', { emissive: '#2f6bff', emissiveIntensity: 0.6 }), 0, 0.2, -0.2, lap, false); sc.rotation.x = -0.25;
-    V2.box(1.4, 2, 0.6, '#b07d50', -13.3, 1.17, -14, fg); col(-14, -14.3, -12.6, -13.7);
-    V2.box(1.4, 0.05, 1.4, '#c9d7e8', 1, 0.2, -19, fg, false); V2.box(0.06, 2.2, 1.4, E.M('#cfe8ff', { transparent: true, opacity: 0.35 }), 0.3, 1.27, -19, fg, false);
-    V2.box(0.5, 0.45, 0.65, '#ffffff', -1.2, 0.4, -19.4, fg); col(-1.5, -19.8, -0.9, -19);
-    V2.box(0.8, 0.85, 0.5, '#ffffff', -4.4, 0.6, -19.6, fg); col(-4.8, -19.9, -4, -19.3);
-    F.bath = at(-2.6, -16.6); V2.box(1.8, 0.6, 0.9, '#ffffff', 0, 0.3, 0, F.bath); V2.box(1.6, 0.05, 0.7, '#9fd4ff', 0, 0.58, 0, F.bath);
-    b.lights = [[-10, -9.5], [-2.5, -9.5], [-10, -16.5], [-2.5, -16.5]].map(([x, z]) => { const l = new T.PointLight('#ffe2b0', 0, 9); l.position.set(x, 2.8, z); g.add(l); return l; });
-    const H = 'home';
-    const o = (q) => obj({ ...q, where: H }, ox, oz);
-    o({ x: -12.2, z: -15.8, r: 1.8, label: () => '🛏️ Sleep', use: () => activity('sleep', 'Sleeping… zzz', 99, { energy: has('goodbed') ? 18 : 12 }, { x: -12.2, z: -17.4, face: Math.PI, lie: true }) });
-    o({ x: 1, z: -18.2, r: 1.3, label: () => '🚿 Shower', use: () => activity('shower', 'Showering', 5, { hygiene: 22 }, { x: 1, z: -19, face: Math.PI }) });
-    o({ x: -1.2, z: -18.6, r: 1.1, label: () => '🚽 Toilet', use: () => activity('toilet', 'Using the toilet', 3, { hygiene: 4 }, { x: -1.2, z: -19.3, face: 0, sit: true }) });
-    o({ x: -4.4, z: -18.9, r: 1.1, label: () => '🧼 Wash hands', use: () => activity('wash', 'Washing hands', 2, { hygiene: 6 }) });
-    o({ x: -2.6, z: -15.6, r: 1.4, need: 'bath', label: () => '🛁 Bath', use: () => activity('bath', 'Relaxing in the bath', 7, { hygiene: 16, fun: 5 }, { x: -2.6, z: -16.6, face: -Math.PI / 2, lie: true }) });
-    o({ x: -10.5, z: -9.2, r: 1.6, label: () => '📺 Watch TV', use: () => activity('tv', 'Watching TV', 99, { fun: has('bigtv') ? 9 : 5, energy: 0.5 }, { x: -10.5, z: -8.2, face: Math.PI, sit: true }) });
-    o({ x: -9.6, z: -11.6, r: 1.1, need: 'console', label: () => '🎮 Play video games', use: () => activity('console', 'Gaming', 99, { fun: 12, energy: -1 }, { x: -10, z: -8.2, face: Math.PI, sit: true }) });
-    o({ x: -12.9, z: -10.5, r: 1.2, need: 'shelf', label: () => '📚 Read a book', use: () => activity('read', 'Reading', 99, { fun: 6 }) });
-    o({ x: -7, z: -7.4, r: 1.2, need: 'aquarium', label: () => '🐠 Watch the fish', use: () => activity('fish', 'Watching the fish', 8, { fun: 4, energy: 1 }) });
-    o({ x: 1.3, z: -11.4, r: 1.3, label: () => '🧊 Fridge', use: openFridge });
-    o({ x: -1, z: -11.7, r: 1.2, label: () => '🍳 Cook', use: openStove });
-    o({ x: -4.8, z: -11.8, r: 1, need: 'coffee', label: () => '☕ Make coffee', use: () => activity('coffee', 'Making coffee', 3, { energy: 9 }) });
-    o({ x: -7.4, z: -14.4, r: 1.3, label: () => '💻 Laptop: jobs, home shop, bank', use: () => { stopAct(); openLaptop('jobs'); } });
+    F.plants = [[-13.3, -6.7, 0], [-5.5, -6.7, 0], [-13.3, -19.3, 1]].map(([x, z, f]) => { const p = at(x, z, f); V2.cyl(0.25, 0.2, 0.45, '#d0784a', 0, 0.22, 0, p); V2.box(0.6, 0.6, 0.6, '#3f8a3a', 0, 0.75, 0, p); return p; });
+    F.aquarium = at(-7.5, -6.6); V2.box(1.4, 0.7, 0.5, '#6b4a2f', 0, 0.35, 0, F.aquarium); V2.box(1.3, 0.7, 0.45, E.M('#5fb6ef', { transparent: true, opacity: 0.55 }), 0, 1.05, 0, F.aquarium);
+    V2.box(5.1, 0.95, 0.8, '#f2f3f5', -3.05, Y0 + 0.47, -19.55, fg); V2.box(5.2, 0.06, 0.9, '#6f7685', -3.05, Y0 + 0.97, -19.55, fg); // kitchen counter
+    V2.box(1, 2, 0.8, '#e7ebf2', -6.4, Y0 + 1, -19.5, fg); // fridge
+    V2.box(0.8, 0.04, 0.6, '#2b3350', -2, Y0 + 1.0, -19.55, fg, false); V2.box(0.7, 0.05, 0.45, '#9aa3b5', -3.6, Y0 + 1.0, -19.55, fg, false);
+    F.coffee = V2.box(0.35, 0.45, 0.3, '#2b3350', -1, Y0 + 1.22, -19.6, fg);
+    const table = at(-3, -11); V2.cyl(0.9, 0.9, 0.08, '#8b6b4a', 0, 0.78, 0, table, 24); V2.cyl(0.08, 0.12, 0.75, '#6b4a2f', 0, 0.38, 0, table, 8);
+    // ---- upstairs: bedroom, office, bathroom ----
+    const bed = at(-12.2, -17.6, 1); V2.box(2, 0.45, 2.8, '#8b6b4a', 0, 0.22, 0, bed); F.blanket = V2.box(1.9, 0.18, 2.1, '#8a5cff', 0, 0.54, 0.3, bed); V2.box(1.5, 0.2, 0.5, '#ffffff', 0, 0.56, -1, bed); V2.box(2, 1, 0.15, '#6b4a2f', 0, 0.6, -1.4, bed);
+    V2.box(1.4, 2, 0.6, '#b07d50', -13.3, up + 1, -12, fg); // wardrobe
+    const rugUp = V2.box(3, 0.02, 2, '#ffb6c9', -10, up + 0.02, -13, fg, false);
+    V2.box(1.6, 0.06, 0.6, '#8b6b4a', -3, up + 0.78, -10.5, fg); V2.box(0.06, 0.75, 0.55, '#6b4a2f', -3.7, up + 0.38, -10.5, fg); V2.box(0.06, 0.75, 0.55, '#6b4a2f', -2.3, up + 0.38, -10.5, fg);
+    const lap = at(-3, -10.6, 1); lap.position.y = up + 0.81; V2.box(0.6, 0.03, 0.42, '#c3cad8', 0, 0, 0, lap); const sc = V2.box(0.54, 0.34, 0.02, E.M('#2f6bff', { emissive: '#2f6bff', emissiveIntensity: 0.6 }), 0, 0.2, -0.2, lap, false); sc.rotation.x = -0.25;
+    V2.box(0.5, 0.45, 0.5, '#2b3350', -3, up + 0.23, -9.6, fg);
+    V2.box(1.4, 0.05, 1.4, '#c9d7e8', 1, up + 0.03, -19, fg, false); V2.box(0.06, 2.2, 1.4, E.M('#cfe8ff', { transparent: true, opacity: 0.35 }), 0.3, up + 1.1, -19, fg, false);
+    V2.box(0.5, 0.45, 0.65, '#ffffff', -1.2, up + 0.23, -19.4, fg);
+    V2.box(0.8, 0.85, 0.5, '#ffffff', -4.4, up + 0.43, -19.6, fg); V2.box(0.6, 0.6, 0.04, E.M('#cfe8ff', { metalness: 0.6, roughness: 0.05 }), -4.4, up + 1.6, -19.85, fg, false);
+    F.bath = at(-3, -17.55, 1); V2.box(1.8, 0.6, 0.9, '#ffffff', 0, 0.3, 0, F.bath); V2.box(1.6, 0.05, 0.7, '#9fd4ff', 0, 0.58, 0, F.bath);
+    b.lights = [[-7, -13, 0], [-7, -13, 1]].map(([x, z, f]) => { const l = new T.PointLight('#ffe2b0', 3, 16); l.position.set(x, Y0 + f * FH + 2.7, z); g.add(l); return l; });
+    const o = (q) => obj({ ...q, where: 'home' }, ox, oz);
+    o({ x: -12.2, z: -15.8, r: 1.8, floor: 1, label: () => '🛏️ Sleep', use: () => activity('sleep', 'Sleeping… zzz', 99, { energy: has('goodbed') ? 18 : 12 }, { x: -12.2, z: -17.4, face: Math.PI, lie: true }) });
+    o({ x: 1, z: -18.2, r: 1.3, floor: 1, label: () => '🚿 Shower', use: () => activity('shower', 'Showering', 5, { hygiene: 22 }, { x: 1, z: -19, face: Math.PI }) });
+    o({ x: -1.2, z: -18.6, r: 1.1, floor: 1, label: () => '🚽 Toilet', use: () => activity('toilet', 'Using the toilet', 3, { hygiene: 4 }, { x: -1.2, z: -19.3, face: 0, sit: true }) });
+    o({ x: -4.4, z: -18.9, r: 1.1, floor: 1, label: () => '🧼 Wash hands', use: () => activity('wash', 'Washing hands', 2, { hygiene: 6 }) });
+    o({ x: -3, z: -16.6, r: 1.4, floor: 1, need: 'bath', label: () => '🛁 Bath', use: () => activity('bath', 'Relaxing in the bath', 7, { hygiene: 16, fun: 5 }, { x: -3, z: -17.55, face: -Math.PI / 2, lie: true }) });
+    o({ x: -3, z: -9.8, r: 1.3, floor: 1, label: () => '💻 Laptop: jobs, business, home shop, bank', use: () => { stopAct(); openLaptop('jobs'); } });
+    o({ x: -10.5, z: -9.2, r: 1.6, floor: 0, label: () => '📺 Watch TV', use: () => activity('tv', 'Watching TV', 99, { fun: has('bigtv') ? 9 : 5, energy: 0.5 }, { x: -10.5, z: -8.2, face: Math.PI, sit: true }) });
+    o({ x: -9.6, z: -11.6, r: 1.1, floor: 0, need: 'console', label: () => '🎮 Play video games', use: () => activity('console', 'Gaming', 99, { fun: 12, energy: -1 }, { x: -10, z: -8.2, face: Math.PI, sit: true }) });
+    o({ x: -12.9, z: -10.5, r: 1.2, floor: 0, need: 'shelf', label: () => '📚 Read a book', use: () => activity('read', 'Reading', 99, { fun: 6 }) });
+    o({ x: -7.5, z: -7.4, r: 1.2, floor: 0, need: 'aquarium', label: () => '🐠 Watch the fish', use: () => activity('fish', 'Watching the fish', 8, { fun: 4, energy: 1 }) });
+    o({ x: -6.4, z: -18.6, r: 1.3, floor: 0, label: () => '🧊 Fridge', use: openFridge });
+    o({ x: -2, z: -18.6, r: 1.2, floor: 0, label: () => '🍳 Cook', use: openStove });
+    o({ x: -1, z: -18.7, r: 0.9, floor: 0, need: 'coffee', label: () => '☕ Make coffee', use: () => activity('coffee', 'Making coffee', 3, { energy: 9 }) });
+    o({ x: 1, z: -13.6, r: 1.2, floor: 0, label: () => '🪜 Stairs up · just walk', use: () => {} });
     applyFurniture(b);
   }
   function applyFurniture(b) {
@@ -149,9 +178,9 @@
   function buildMarket() {
     const T = E.T, [cx, cz] = E.lotC(...E.RP_LOTS.market), g = new T.Group(); g.position.set(cx - 13, 0, cz - 15); E.scene.add(g);
     const V2 = adapter(g);
-    // the door faces +z (the road), so walls here are mirrored from LSP Life's market
-    const b = building({ x0: 4, x1: 22, z0: 8, z1: 22, wall: '#e8f1fb', floor: '#e9edf4', roof: '#2f6bff', trim: '#2f6bff', walls: [[4, 22, 22, 'h', [[11, 13]]], [4, 22, 8, 'h'], [8, 22, 4, 'v'], [8, 22, 22, 'v']] }, V2, g);
-    const sign = V2.sprite('🛒 LSP Market', 5, 1.1, '#2f6bff'); sign.position.set(12, 4.6, 22.4); b.market = true;
+    const b = building({ x0: 4, x1: 22, z0: 8, z1: 22, h: 4, wall: '#e8f1fb', floor: '#e9edf4', roof: '#2f6bff', trim: '#2f6bff', walls: [[4, 22, 22, 'h', [[11, 13]]], [4, 22, 8, 'h'], [8, 22, 4, 'v'], [8, 22, 22, 'v']], windows: [[7, 22, 1, 2], [17, 22, 1, 2], [20, 22, 1, 2]] }, V2, g);
+    const sign = V2.sprite('🛒 LSP Market', 5, 1.1, '#2f6bff'); sign.position.set(12, 5.6, 22.4); b.sign = sign;
+    const l = new T.PointLight('#ffffff', 5, 18); l.position.set(13, 3.6, 15); g.add(l);
     SHELVES.forEach((row, ri) => {
       const z = 12 + ri * 4;
       V2.box(12, 1.6, 0.9, '#d9dee8', 13.5, 0.97, z, g); E.addCol(g.position.x + 7.5, g.position.z + z - 0.5, g.position.x + 19.5, g.position.z + z + 0.5);
@@ -166,18 +195,50 @@
     const cashier = E.person('#14c79a', '#2d3a5c', '#c68642', '#14c79a'); cashier.position.set(g.position.x + 6.5, 0.17, g.position.z + 17.8); E.scene.add(cashier);
     obj({ x: 6.5, z: 20.2, r: 1.4, where: 'market', label: () => (cart.length ? `💳 Pay $${cartTotal()} at the till` : '🧑 Cashier: "Grab a basket and shop!"'), use: checkout }, g.position.x, g.position.z);
   }
+  /* ---------- Business Center: start and grow your own businesses ---------- */
+  const BIZ = [
+    { id: 'lemon', name: 'Lemonade stand', icon: '🍋', cost: 200, inc: 10 }, { id: 'truck', name: 'Food truck', icon: '🌮', cost: 1500, inc: 50 },
+    { id: 'cafe', name: 'Café', icon: '☕', cost: 4000, inc: 120 }, { id: 'wash', name: 'Car wash', icon: '🚿', cost: 9000, inc: 260 }, { id: 'tech', name: 'Tech startup', icon: '💻', cost: 20000, inc: 600 },
+  ];
+  const BIZ_MAX = 10, upCost = (b, lv) => Math.round(b.cost * 0.75 * lv), incOf = (b, lv) => b.inc * lv;
+  function buildBiz() {
+    const T = E.T, [cx, cz] = E.lotC(...E.RP_LOTS.biz), g = new T.Group(); g.position.set(cx, 0, cz); E.scene.add(g);
+    const V2 = adapter(g);
+    const b = building({ x0: -9, x1: 9, z0: -7, z1: 7, h: 4.5, wall: '#2b3350', floor: '#d9dee8', roof: '#16203d', trim: '#ffb31a', walls: [[-9, 9, 7, 'h', [[-1, 1]]], [-9, 9, -7, 'h'], [-7, 7, -9, 'v'], [-7, 7, 9, 'v']], windows: [[-5, 7, 1, 2.3], [5, 7, 1, 2.3], [-5, -7, 1, 2.3], [5, -7, 1, 2.3]] }, V2, g);
+    b.sign = V2.sprite('🏢 Business Center', 6, 1.1, '#ffb31a', '#16203d'); b.sign.position.set(0, 6.4, 7.5);
+    const l = new T.PointLight('#ffffff', 5, 18); l.position.set(0, 3.8, 0); g.add(l);
+    V2.box(4, 1.1, 1, '#ffb31a', 0, 0.72, -2, g); E.addCol(cx - 2, cz - 2.5, cx + 2, cz - 1.5);
+    const boss = E.person('#16203d', '#2d3a5c', '#8d5524', '#ffb31a'); boss.position.set(cx, 0.17, cz - 3.2); E.scene.add(boss);
+    obj({ x: 0, z: -0.6, r: 1.6, label: () => '🏢 Business manager: start or grow a business', use: openBusiness }, cx, cz);
+    for (const x of [-6.5, -4.5]) for (const z of [-4, 0, 4]) { V2.box(1.4, 0.06, 0.7, '#8b6b4a', x, 0.95, z, g); V2.box(0.6, 0.4, 0.04, E.M('#2f6bff', { emissive: '#2f6bff', emissiveIntensity: 0.5 }), x, 1.22, z - 0.2, g, false); E.addCol(cx + x - 0.7, cz + z - 0.35, cx + x + 0.7, cz + z + 0.35); }
+    obj({ x: -5.5, z: 1.2, r: 2.4, label: () => '💻 Public computer: work a shift', use: () => openLaptop('jobs', true) }, cx, cz);
+    for (const [x, z] of [[7.5, 5.5], [7.5, -5.5], [-8, 5.5]]) { V2.cyl(0.25, 0.2, 0.45, '#d0784a', x, 0.4, z, g); V2.box(0.6, 0.6, 0.6, '#3f8a3a', x, 0.95, z, g); }
+  }
+  function openBusiness() {
+    stopAct(); S.biz = S.biz || {};
+    openUi(`<div class="lf-top"><h3>🏢 Your businesses</h3><span class="pill">${fmt$(S.cash)}</span><button class="x" data-ui="close">✕</button></div><div class="lf-body"><p class="muted" style="margin:0 0 10px">Businesses earn money every hour of game time, even while you drive or sleep. Come back to collect it and upgrade them. Each can hold up to one day of earnings.</p><div class="lf-grid">${BIZ.map((b) => {
+      const o = S.biz[b.id];
+      if (!o) return `<div class="lf-card"><span class="ic">${b.icon}</span><b>${b.name}</b><p>Earns ${fmt$(b.inc)} per hour.</p><button class="btn gold" data-bbuy="${b.id}" ${S.cash < b.cost ? 'disabled' : ''}>Start for ${fmt$(b.cost)}</button></div>`;
+      return `<div class="lf-card"><span class="ic">${b.icon}</span><b>${b.name}</b><p>Level ${o.lv} · ${fmt$(incOf(b, o.lv))}/hour</p><button class="btn primary" data-bcol="${b.id}" ${o.bank < 1 ? 'disabled' : ''}>Collect ${fmt$(o.bank)}</button>${o.lv < BIZ_MAX ? `<button class="btn ghost" data-bup="${b.id}" ${S.cash < upCost(b, o.lv) ? 'disabled' : ''}>Upgrade ${fmt$(upCost(b, o.lv))}</button>` : '<button class="btn ghost" disabled>Max level</button>'}</div>`;
+    }).join('')}</div></div>`);
+    $$('#rp-win [data-bbuy]').forEach((x) => (x.onclick = () => { const b = BIZ.find((q) => q.id === x.dataset.bbuy); if (S.cash < b.cost) return; S.cash -= b.cost; S.biz[b.id] = { lv: 1, bank: 0 }; save(); hud(); L.sfx && L.sfx('win'); say(`🎉 You started your ${b.name}!`); openBusiness(); }));
+    $$('#rp-win [data-bcol]').forEach((x) => (x.onclick = () => { const o = S.biz[x.dataset.bcol]; const n = Math.floor(o.bank); S.cash += n; o.bank -= n; save(); hud(); L.sfx && L.sfx('cash'); openBusiness(); }));
+    $$('#rp-win [data-bup]').forEach((x) => (x.onclick = () => { const b = BIZ.find((q) => q.id === x.dataset.bup), o = S.biz[b.id], c = upCost(b, o.lv); if (S.cash < c) return; S.cash -= c; o.lv++; save(); hud(); L.sfx && L.sfx('ding'); openBusiness(); }));
+  }
 
-  /* ---------- claiming a house ---------- */
-  function claim(i) {
-    if (S.home === i) return say('This is your house. Walk in through the door!');
-    S.home = i; save(); setHouseState(); L.sfx && L.sfx('ding');
-    say('🏠 Welcome to your new house! Walk in and press E to use things. Your laptop is in the bedroom.', 4500);
+  /* ---------- buying a house ---------- */
+  function buy(i) {
+    const b = BUILD.find((x) => x.house === i);
+    if (S.home === i) return say('This is your house. Walk in through the front door!');
+    if (S.cash < b.price) return say(`This house costs ${fmt$(b.price)}. You have ${fmt$(S.cash)}. Earn money with deliveries, the public computers at the Business Center, or a business!`, 4500);
+    S.cash -= b.price; S.home = i; save(); setHouseState(); hud(); L.sfx && L.sfx('win');
+    say(`🏠 You bought this house for ${fmt$(b.price)}! Walk in. Your bed and laptop are upstairs.`, 4500);
   }
   function setHouseState() {
     BUILD.filter((b) => b.house != null).forEach((b) => {
       const mine = S.home === b.house;
       b.door.visible = !mine;
-      b.sign.material.map = E.textSprite(mine ? `🏠 ${(window.Social && Social.me()) || 'Your'}${window.Social && Social.me() ? "'s" : ''} house` : S.home == null ? '🏠 Free house · E to claim' : '🏠 Free house', mine ? '#14c79a' : 'rgba(22,32,61,.8)', '#ffffff', 4.6, 0.8).material.map;
+      b.sign.material.map = E.textSprite(mine ? `🏠 ${(window.Social && Social.me()) || 'Your'}${window.Social && Social.me() ? "'s" : ''} house` : `🏠 For sale · ${fmt$(b.price)}`, mine ? '#14c79a' : 'rgba(22,32,61,.8)', '#ffffff', 4.6, 0.8).material.map;
       if (mine && !b.F) furnish(b);
       if (b.furnGroup) b.furnGroup.visible = mine;
       b.locked = !mine;
@@ -191,6 +252,7 @@
   function say(m, ms) { toast(m, ms || 2600); }
   function activity(id, text, secs, gain, spot) {
     stopAct(); act = { id, text, t: 0, secs, gain, spot: spot ? { ...spot, x: spot.x + curHouse().group.position.x, z: spot.z + curHouse().group.position.z } : null };
+    if (act.spot) act.spot.floor = E.getF().floor || 0;
     if (act.spot) { const F = E.getF(); F.x = act.spot.x; F.z = act.spot.z; F.h = act.spot.face; }
     $('#rp-act').hidden = false; $('#rp-act-t').textContent = text; L.sfx && L.sfx('click');
   }
@@ -226,8 +288,11 @@
     openUi(`<div class="lf-top"><h3>🍳 Cook</h3><button class="x" data-ui="close">✕</button></div><div class="lf-body"><div class="lf-grid">${RECIPES.map((r) => { const ok = Object.entries(r.need).every(([k, n]) => (S.pantry[k] || 0) >= n); return `<div class="lf-card"><span class="ic">${r.icon}</span><b>${r.name}</b><p>Needs ${Object.keys(r.need).map((k) => FOODS[k].icon).join(' + ')}</p><button class="btn ${ok ? 'primary' : 'ghost'}" data-cook="${r.id}" ${ok ? '' : 'disabled'}>${ok ? 'Cook' : 'Missing food'}</button></div>`; }).join('')}</div></div>`);
     $$('#rp-win [data-cook]').forEach((b) => (b.onclick = () => { const r = RECIPES.find((x) => x.id === b.dataset.cook); for (const [k, n] of Object.entries(r.need)) S.pantry[k] -= n; closeUi(); save(); activity('cook', `Cooking ${r.name.toLowerCase()}`, 5, { hunger: r.fill / 5, fun: r.fun / 5 }, { x: -1, z: -11.7, face: Math.PI }); }));
   }
-  function openLaptop(tab) {
-    const apps = `<div class="lf-apps">${[['jobs', '💼 Jobs'], ['shop', '🛋️ Home shop'], ['bank', '🏦 Bank']].map(([id, l]) => `<button data-app="${id}" class="${tab === id ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  let publicPc = false;
+  function openLaptop(tab, pub) {
+    if (pub !== undefined) publicPc = pub;
+    if (tab === 'biz') return openBusiness();
+    const apps = `<div class="lf-apps">${[['jobs', '💼 Jobs'], ['biz', '🏢 Business'], ...(publicPc ? [] : [['shop', '🛋️ Home shop']]), ['bank', '🏦 Bank']].map(([id, l]) => `<button data-app="${id}" class="${tab === id ? 'on' : ''}">${l}</button>`).join('')}</div>`;
     let body = '';
     if (tab === 'jobs') body = `<div class="lf-grid">${JOBS.map((j) => `<div class="lf-card"><span class="ic">${j.icon}</span><b>${j.name}</b><p>${j.desc}</p><p>Level ${1 + Math.floor((S.jobs[j.id] || 0) / 5)}</p><button class="btn primary" data-job="${j.id}">Start 60s shift</button></div>`).join('')}</div>`;
     else if (tab === 'shop') body = `<div class="lf-grid">${FURNI.map((f) => `<div class="lf-card"><span class="ic">${f.icon}</span><b>${f.name}</b><p>${f.desc}</p><button class="btn ${has(f.id) ? 'ghost' : 'gold'}" data-buy="${f.id}" ${has(f.id) || S.cash < f.price ? 'disabled' : ''}>${has(f.id) ? 'In your house' : 'Buy ' + fmt$(f.price)}</button></div>`).join('')}</div>`;
@@ -285,7 +350,7 @@
       DB = L.store('life', { cash: 250, pantry: { bread: 1, apple: 2, eggs: 1, veg: 1 }, owned: [], needs: { hunger: 80, energy: 80, hygiene: 80, fun: 70 }, time: 8 * 60, day: 1, jobs: { type: 0, code: 0, support: 0 }, earned: 0, shifts: 0 });
       S = DB.load(); if (S.home === undefined) S.home = null;
       E.RP_LOTS.houses.forEach((_, i) => buildHouse(i));
-      buildMarket();
+      buildMarket(); buildBiz();
       const scr = $('#s-drive');
       $('#s-drive .hud').insertAdjacentHTML('beforeend', '<span class="hudpill" id="rp-cash">$0</span><span class="hudpill" id="rp-clock"></span><span class="hudpill" id="rp-needs" title="Hunger, energy, hygiene, fun"></span><span class="hudpill" id="rp-cart" hidden></span>');
       scr.insertAdjacentHTML('beforeend', '<div class="lf-act" id="rp-act" hidden><span id="rp-act-t"></span><div class="bar"><i id="rp-act-b" style="width:0%"></i></div><button id="rp-act-x">Stop</button></div><div class="lf-ui" id="rp-ui" hidden><div class="lf-win" id="rp-win"></div></div>');
@@ -297,17 +362,18 @@
       D3.lamp = E.M('#fffbe6', { emissive: '#fff1c2', emissiveIntensity: 0.6 });
       setHouseState(); RP.ready = true; hud();
     },
-    enter() { S = DB.load(); if (S.home === undefined) S.home = null; setHouseState(); hud(); if (S.home == null) setTimeout(() => toast('🏠 Free houses are next to your garage. Walk up to one and press E to claim it!', 5000), 2500); },
+    enter() { S = DB.load(); if (S.home === undefined) S.home = null; setHouseState(); hud(); if (S.home == null) setTimeout(() => toast(`🏠 You have ${fmt$(S.cash)} and no house yet. Houses for sale are next to your garage. Earn money at the 🏢 Business Center (public computers) and with deliveries, then buy one!`, 6500), 2500); },
     leave() { stopAct(); closeUi(); cart = []; if (shift) shift = null; save(); },
-    blocked: () => ui || !!(act && act.spot) || RP.inside(),
+    blocked: () => ui || !!(act && act.spot),
     inside() { const F = E.getF(); return E.G.mode === 'foot' && BUILD.some((b) => insideB(b, F.x, F.z)); },
     _tp(x, z) { const F = E.getF(); F.x = x; F.z = z; F.vx = F.vz = 0; },
     _S: () => S,
+    _F: () => E.getF(),
     addCash(n) { if (!S || !(n > 0)) return; S.cash += n; save(); hud(); },
     nearest() {
       const F = E.getF(); let best = null, bd = 1e9;
       for (const o of OBJ) {
-        if (o.need && !has(o.need)) continue; if (o.where === 'home' && (S.home == null || !insideB(curHouse(), o.x, o.z))) continue;
+        if (o.need && !has(o.need)) continue; if (o.floor != null && o.floor !== (F.floor || 0)) continue; if (o.where === 'home' && (S.home == null || !insideB(curHouse(), o.x, o.z))) continue;
         const d = Math.hypot(o.x - F.x, o.z - F.z); if (d < o.r && d < bd) { bd = d; best = o; }
       }
       return best;
@@ -321,15 +387,52 @@
       o.use(); return true;
     },
     cam(camera, dt) {
-      const F = E.getF(); if (!BUILD.some((b) => insideB(b, F.x, F.z))) return false;
-      D3.cx = D3.cx == null ? F.x : D3.cx + (F.x - D3.cx) * Math.min(1, dt * 6); D3.cz = D3.cz == null ? F.z : D3.cz + (F.z - D3.cz) * Math.min(1, dt * 6);
-      camera.position.set(D3.cx, 9.5, D3.cz + 7.6); camera.lookAt(D3.cx, 0.6, D3.cz - 0.4); return true;
+      const F = E.getF(), b = BUILD.find((q) => insideB(q, F.x, F.z));
+      if (!b) { D3.ch = D3.cp = null; return false; }
+      D3.ch = D3.ch == null ? F.h : D3.ch + wrapA(F.h - D3.ch) * Math.min(1, dt * 5);
+      const fx = Math.sin(D3.ch), fz = Math.cos(D3.ch), m = 0.4;
+      const ceil = b.house != null ? Y0 + Math.min(2, (F.floor || 0) + 1 + (F.stairs ? 1 : 0)) * FH - 0.35 : Y0 + b.h - 0.35;
+      const want = { x: clamp(F.x - fx * 3.2, b.wx0 + m, b.wx1 - m), y: Math.min(ceil, F.y + 2.1), z: clamp(F.z - fz * 3.2, b.wz0 + m, b.wz1 - m) };
+      if (!D3.cp) D3.cp = { ...want }; const k = Math.min(1, dt * 7);
+      for (const a of ['x', 'y', 'z']) D3.cp[a] += (want[a] - D3.cp[a]) * k;
+      camera.position.set(D3.cp.x, D3.cp.y, D3.cp.z); camera.lookAt(F.x + fx * 2, F.y + 1.3, F.z + fz * 2); return true;
+    },
+    // called by LSP Drive right after it moves you on foot: stairs, upstairs, room walls, flying
+    foot(F, dt, gy) {
+      if (window.LSPG_FLY) {
+        const K = E.K; F.flyY = Math.max(gy, (F.flyY == null ? F.y : F.flyY) + ((K.Space || K.KeyQ ? 9 : 0) - (K.KeyX || K.KeyZ ? 9 : 0)) * dt);
+        F.y = F.flyY; F.floor = 0; F.stairs = false; return;
+      }
+      F.flyY = null;
+      const b = BUILD.find((q) => q.house != null && insideB(q, F.x, F.z));
+      if (!b) { F.floor = 0; F.stairs = false; return; }
+      const ox = b.group.position.x, oz = b.group.position.z, lx = F.x - ox, lz = F.z - oz;
+      const onSt = lx > 0 && lx < 2 && lz > -13 && lz < -8;
+      if (onSt) {
+        const t = clamp((lz + 13) / 5, 0, 1);
+        if (!F.stairs && (F.floor || 0) === 1 && t < 0.8) { /* fell into the hole: can't, railing */ }
+        F.stairs = true; F.y = Y0 + t * FH; F.floor = t > 0.5 ? 1 : 0;
+      } else {
+        if (F.stairs) F.floor = lz >= -8 ? 1 : 0; F.stairs = false;
+        F.y = Y0 + (F.floor || 0) * FH;
+      }
+      const cols = onSt ? [[-0.1, -13, 0.1, -8]] : FLOOR_COLS[F.floor || 0], r = 0.35;
+      let px = lx, pz = lz;
+      for (const [x0, z0, x1, z1] of cols) {
+        const cx = clamp(px, x0, x1), cz = clamp(pz, z0, z1), dx = px - cx, dz = pz - cz, d = Math.hypot(dx, dz);
+        if (d >= r) continue;
+        if (d > 1e-4) { px = cx + (dx / d) * r; pz = cz + (dz / d) * r; }
+        else { const o = [[px - x0 + r, -1, 0], [x1 - px + r, 1, 0], [pz - z0 + r, 0, -1], [z1 - pz + r, 0, 1]].sort((a, q) => a[0] - q[0])[0]; px += o[1] * o[0]; pz += o[2] * o[0]; }
+      }
+      F.x = px + ox; F.z = pz + oz;
     },
     tick(dt) {
       if (!S) return;
       const sleeping = act && act.id === 'sleep', speed = sleeping ? 15 : 1;
       S.time += dt * MIN_PER_SEC * speed; if (S.time >= DAY_MIN) { S.time -= DAY_MIN; S.day++; say(`☀️ Day ${S.day}`); }
       addNeeds({ hunger: -0.09, energy: sleeping ? 0 : -0.05, hygiene: -0.035, fun: E.G.mode === 'drive' ? 0.05 : -0.05 }, dt * (sleeping ? 0.3 : 1));
+      const gm = dt * MIN_PER_SEC * speed;
+      if (S.biz) for (const bz of BIZ) { const o = S.biz[bz.id]; if (o) o.bank = Math.min(incOf(bz, o.lv) * 24, o.bank + (incOf(bz, o.lv) / 60) * gm); }
       if (shift) { shift.t -= dt; const e = $('#rp-st'); if (e) e.textContent = Math.ceil(shift.t); if (shift.t <= 0) endShift(); }
       if (act) {
         act.t += dt; addNeeds(act.gain, dt);
@@ -339,15 +442,7 @@
         else if ((act.id === 'tv' || act.id === 'console' || act.id === 'read') && S.needs.fun >= 100) stopAct();
         const b = curHouse(); if (b && b.F && (act && (act.id === 'tv' || act.id === 'console'))) b.F.screen.material = E.M('#5fb6ef', { emissive: ['#2f6bff', '#ff4d8b', '#14c79a'][Math.floor(act.t) % 3], emissiveIntensity: 1.2 });
       }
-      // inside a building: walk with WASD the way the screen shows (camera faces north)
-      const F = E.getF(), K = E.K, T2 = E.TIN;
-      if (E.G.mode === 'foot' && RP.inside() && !ui) {
-        let mx = (K.KeyD || K.ArrowRight || T2.right ? 1 : 0) - (K.KeyA || K.ArrowLeft || T2.left ? 1 : 0), mz = (K.KeyS || K.ArrowDown || T2.brake ? 1 : 0) - (K.KeyW || K.ArrowUp || T2.gas ? 1 : 0);
-        const len = Math.hypot(mx, mz);
-        if (len) { mx /= len; mz /= len; if (act) stopAct(); F.h = Math.atan2(mx, mz); }
-        const sp = (K.ShiftLeft || K.ShiftRight ? 7 : 4.2) * (S.needs.energy < 10 ? 0.6 : 1);
-        if (!act || !act.spot) { F.vx = mx * sp; F.vz = mz * sp; }
-      }
+      const F = E.getF();
       if (act && act.spot) { F.x = act.spot.x; F.z = act.spot.z; F.h = act.spot.face; F.vx = F.vz = 0; }
       // locked doors on houses that aren't yours
       for (const b of BUILD) if (b.house != null && b.locked) { const c = b.doorCol; if (F.x > c.x0 - 0.35 && F.x < c.x1 + 0.35 && Math.abs(F.z - (c.z0 + c.z1) / 2) < 0.4) F.z = (c.z0 + c.z1) / 2 + (F.z < (c.z0 + c.z1) / 2 ? -0.4 : 0.4); }
@@ -358,20 +453,19 @@
       // poses for sitting and lying
       if (E.G.mode === 'foot' && act && act.spot && F.m) {
         const u = F.m.userData;
-        if (act.spot.lie) { F.m.rotation.set(-Math.PI / 2, F.h, 0, 'YXZ'); F.m.position.y = 0.78; }
-        else if (act.spot.sit) { u.legs[0].rotation.x = u.legs[1].rotation.x = -1.4; F.m.position.y = 0.25; }
+        if (act.spot.lie) { F.m.rotation.set(-Math.PI / 2, F.h, 0, 'YXZ'); F.m.position.y = F.y + 0.61; }
+        else if (act.spot.sit) { u.legs[0].rotation.x = u.legs[1].rotation.x = -1.4; F.m.position.y = F.y + 0.08; }
       } else if (F.m && F.m.rotation.x) F.m.rotation.x = 0;
       if (act && (act.id === 'eat' || act.id === 'cook' || act.id === 'coffee') && F.m) F.m.userData.arms[1].rotation.x = -1.2 + Math.sin(now * 10) * 0.4;
       if (act && act.id === 'shower' && Math.random() < 0.5) E.puff(F.x + (Math.random() - 0.5) * 0.6, 2.3, F.z + (Math.random() - 0.5) * 0.6, '#bfe8ff', 0.15, 0.5, 0, -4, 0, 0, 0.8);
-      // walls drop when you are inside, like Brookhaven and Bloxburg
-      for (const b of BUILD) { const inn = E.G.mode === 'foot' && insideB(b, F.x, F.z); if (b.sign) b.sign.visible = !inn; b.walls.scale.y += ((inn ? 0.12 : 1) - b.walls.scale.y) * Math.min(1, dt * 8); b.roof.visible = !inn; }
-      if (!RP.inside()) D3.cx = D3.cz = null;
+      // houses are closed rooms: only the floating sign hides while you are inside
+      for (const b of BUILD) { const inn = E.G.mode === 'foot' && insideB(b, F.x, F.z); if (b.sign) b.sign.visible = !inn; }
       // day and night across the whole city
       const h = S.time / 60, day = clamp(Math.sin(((h - 6) / 24) * Math.PI * 2) * 1.6 + 0.35, 0, 1);
       E.sun.intensity = 0.3 + 1.9 * day; if (D3.hemi) D3.hemi.intensity = 0.25 + 0.75 * day;
       E.scene.background = day < 0.25 ? D3.night : D3.bg; E.scene.fog.color.copy(day < 0.25 ? D3.night : D3.fog);
       D3.lamp.emissiveIntensity = day < 0.5 ? 2.5 : 0.6;
-      const b = curHouse(); if (b && b.lights) b.lights.forEach((l) => (l.intensity = day < 0.5 && S.home === b.house ? 6 : 0));
+      const b = curHouse(); if (b && b.lights) b.lights.forEach((l) => (l.intensity = S.home === b.house ? (day < 0.5 ? 14 : 8) : 0));
     },
   });
 })();
