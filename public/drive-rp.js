@@ -531,23 +531,124 @@
     const ex = $('#rp-win [data-express]'); if (ex) ex.onclick = () => place(S.cash >= p.price + 15 ? 'upi' : 'card', true);
     $('#rp-win [data-back]').onclick = () => back(p.cat, '');
   }
+  /* ---------- deliveries: a delivery partner brings your order; you share the OTP ---------- */
+  function handOver(o) {
+    o.done = true; o.out = false; const p = PRODUCTS.find((q) => q.id === o.pid); if (!p) return;
+    if (p.food) for (const [k, n] of Object.entries(p.food)) S.pantry[k] = (S.pantry[k] || 0) + n;
+    else if (p.furni) { if (!has(p.id)) S.owned.push(p.id); applyFurniture(curHouse()); }
+    else if (p.phone) S.phone = p.id;
+    else addStuff({ id: p.id, name: p.name, icon: p.icon });
+    notify(`📦 Delivered: ${p.icon} ${p.name}${p.food ? ' (in your fridge)' : p.furni ? (S.home != null ? ' (set up in your house)' : ' (it will be in your house when you buy one)') : p.phone ? ' (your new phone!)' : ' (in 📱 My stuff)'}`);
+  }
+  // where the parcel goes: your front door, or the LSP Market pickup point if you have no house
+  function dropPoint() {
+    if (S.home != null) { const g = curHouse().group.position; return { x: g.x - 6.3, z: g.z - 4.4, name: 'your front door' }; }
+    const [cx, cz] = E.lotC(...E.RP_LOTS.market); return { x: cx - 13 + 12, z: cz - 15 + 23.4, name: 'the LSP Market pickup point' };
+  }
+  const CR = { st: null };
   function deliverOrders() {
     for (const o of S.orders || []) {
-      if (o.done || absMin() < o.eta) continue;
-      o.done = true; const p = PRODUCTS.find((q) => q.id === o.pid); if (!p) continue;
-      if (p.food) for (const [k, n] of Object.entries(p.food)) S.pantry[k] = (S.pantry[k] || 0) + n;
-      else if (p.furni) { if (!has(p.id)) S.owned.push(p.id); applyFurniture(curHouse()); }
-      else if (p.phone) S.phone = p.id;
-      else addStuff({ id: p.id, name: p.name, icon: p.icon });
-      notify(`📦 Delivered: ${p.icon} ${p.name}${p.food ? ' (in your fridge)' : p.furni ? (S.home != null ? ' (set up in your house)' : ' (it will be in your house when you buy one)') : p.phone ? ' (your new phone!)' : ''}`);
-      L.sfx && L.sfx('ding');
+      if (o.done || o.out || absMin() < o.eta) continue;
+      o.out = true; o.otp = String(1000 + Math.floor(Math.random() * 9000));
+      const p = PRODUCTS.find((q) => q.id === o.pid) || { icon: '📦', name: 'parcel' };
+      notify(`🔐 OTP ${o.otp} for order #${o.id} (${p.icon} ${p.name}). A delivery partner is on the way to ${dropPoint().name}. Share this OTP only with them.`);
     }
+    if (!CR.st && (S.orders || []).some((o) => o.out && !o.done)) sendCourier();
   }
-  const orderStatus = (o) => { if (o.done) return ['Delivered', 100]; const f = (absMin() - o.at) / (o.eta - o.at); return [f < 0.25 ? 'Order placed' : f < 0.6 ? 'Shipped' : 'Out for delivery', Math.round(f * 100)]; };
+  function sendCourier() {
+    const T = E.T, d = dropPoint();
+    // park on the nearest road, in line with the door, then walk over
+    let best = null;
+    for (let i = 0; i <= 6; i++) { const r = E.RX(i); if (!best || Math.abs(d.x - r) < best.dist) best = { dist: Math.abs(d.x - r), vert: true, r }; if (Math.abs(d.z - r) < best.dist) best = { dist: Math.abs(d.z - r), vert: false, r }; }
+    const side = best.vert ? Math.sign(d.x - best.r) : Math.sign(d.z - best.r);
+    const stop = best.vert ? { x: best.r + side * 3.2, z: d.z } : { x: d.x, z: best.r + side * 3.2 };
+    const start = best.vert ? { x: stop.x, z: stop.z - 90 } : { x: stop.x - 90, z: stop.z };
+    const van = new T.Group(), V2 = adapter(van);
+    V2.box(2.2, 2.3, 4.4, '#ffb31a', 0, 1.55, -0.3, van); V2.box(2.1, 1.3, 1.4, '#ffb31a', 0, 1.05, 2.4, van); V2.box(2, 0.7, 0.05, E.M('#16203d', { metalness: 0.5, roughness: 0.1 }), 0, 1.45, 3.11, van, false);
+    for (const [x, z] of [[-1, 1.9], [1, 1.9], [-1, -1.6], [1, -1.6]]) V2.cyl(0.42, 0.42, 0.3, '#16203d', x, 0.42, z, van, 14).rotation.z = Math.PI / 2;
+    for (const s of [-1, 1]) { const t = E.textSprite('🛍️ LSP Store', '#16203d', '#ffb31a', 3, 0.7); t.position.set(s * 1.2, 1.9, -0.3); van.add(t); }
+    van.position.set(start.x, 0, start.z); van.rotation.y = Math.atan2(stop.x - start.x, stop.z - start.z); E.scene.add(van);
+    const man = E.person('#ffb31a', '#2d3a5c', ['#c68642', '#8d5524', '#f1c27d'][Math.floor(Math.random() * 3)], '#ffb31a');
+    const box = V2.box(0.55, 0.45, 0.45, '#c9a26b', 0, 1.15, 0.38, man, false); man.visible = false; E.scene.add(man);
+    Object.assign(CR, { st: 'drive', van, man, box, start, stop, d, t: 0, wait: 0 });
+    CR.o = obj({ x: d.x, z: d.z, r: 2.8, when: () => CR.st === 'wait', label: () => (CR.st === 'wait' ? '📦 Delivery partner: "Your OTP please?"' : ''), use: () => CR.st === 'wait' && otpPad() }, 0, 0);
+  }
+  function otpPad() {
+    const due = (S.orders || []).filter((o) => o.out && !o.done); if (!due.length) return;
+    let typed = '';
+    const draw = () => {
+      openUi(`<div class="lf-top"><h3>📦 Delivery · ${due.length} parcel${due.length > 1 ? 's' : ''}</h3><button class="x" data-ui="close">✕</button></div><div class="lf-body" style="max-width:340px;margin:auto;text-align:center"><p class="muted" style="margin:0 0 8px">Open 📱 Orders or Alerts to see your OTP, then tell the delivery partner.</p>${due.map((o) => { const p = PRODUCTS.find((q) => q.id === o.pid) || {}; return `<div class="rp-row"><span style="font-size:22px">${p.icon || '📦'}</span><b style="flex:1;text-align:left">${p.name || 'Parcel'}</b><span class="muted">#${o.id}</span></div>`; }).join('')}<div class="otp-in">${[0, 1, 2, 3].map((i) => `<i>${typed[i] || ''}</i>`).join('')}</div><div class="otp-pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9, '⌫', 0, '✓'].map((k) => `<button data-k="${k}">${k}</button>`).join('')}</div><button class="btn ghost" data-peek="1" style="margin-top:8px">📱 Check my phone</button></div>`);
+      $$('#rp-win [data-k]').forEach((b) => (b.onclick = () => { const k = b.dataset.k; if (k === '⌫') typed = typed.slice(0, -1); else if (k === '✓') return check(); else if (typed.length < 4) typed += k; L.sfx && L.sfx('click'); draw(); }));
+      $('#rp-win [data-peek]').onclick = () => { openPhone('orders'); };
+    };
+    const check = () => {
+      const hit = due.filter((o) => o.otp === typed);
+      if (!hit.length) { L.sfx && L.sfx('hurt', { volume: 0.4 }); say('❌ "That OTP is not right. Check your phone."'); typed = ''; return draw(); }
+      // one OTP per order: hand over the ones that match; the rest need their own OTP
+      hit.forEach(handOver); save(); hud(); L.sfx && L.sfx('win');
+      const left = due.filter((o) => !o.done);
+      if (left.length) { say(`✅ Thanks! You have ${left.length} more parcel${left.length > 1 ? 's' : ''}. Tell me the next OTP.`); typed = ''; due.splice(0, due.length, ...left); return draw(); }
+      closeUi(); say('✅ "Here you go! Have a nice day."'); CR.st = 'back'; CR.box.visible = false;
+    };
+    draw();
+  }
+  function tickCourier(dt) {
+    if (!CR.st) return;
+    const v = CR.van, m = CR.man, walk = (tx, tz, sp) => { const dx = tx - m.position.x, dz = tz - m.position.z, d = Math.hypot(dx, dz); if (d < 0.15) return true; m.position.x += (dx / d) * Math.min(d, sp * dt); m.position.z += (dz / d) * Math.min(d, sp * dt); m.rotation.y = Math.atan2(dx, dz); const u = m.userData, w = Math.sin(performance.now() / 120) * 0.6; u.legs[0].rotation.x = w; u.legs[1].rotation.x = -w; return false; };
+    if (CR.st === 'drive' || CR.st === 'leave') {
+      CR.t = Math.min(1, CR.t + dt / 7); const k = CR.st === 'drive' ? 1 - (1 - CR.t) * (1 - CR.t) : CR.t * CR.t, a = CR.st === 'drive' ? CR.start : CR.stop, b = CR.st === 'drive' ? CR.stop : CR.start;
+      v.position.x = a.x + (b.x - a.x) * k; v.position.z = a.z + (b.z - a.z) * k;
+      if (CR.t >= 1) { if (CR.st === 'drive') { CR.st = 'walk'; m.visible = true; m.position.set(CR.stop.x, Y0, CR.stop.z); } else { E.scene.remove(v); E.scene.remove(m); OBJ.splice(OBJ.indexOf(CR.o), 1); CR.st = null; deliverOrders(); } }
+    } else if (CR.st === 'walk') { if (walk(CR.d.x, CR.d.z, 2.2)) { CR.st = 'wait'; CR.wait = 0; notify(`🚚 Your delivery partner is waiting at ${CR.d.name}. Share your OTP.`); } }
+    else if (CR.st === 'wait') { const F = E.getF(); m.rotation.y = Math.atan2(F.x - m.position.x, F.z - m.position.z); CR.wait += dt; const u = m.userData; u.legs[0].rotation.x = u.legs[1].rotation.x = 0; }
+    else if (CR.st === 'back') { if (walk(CR.stop.x, CR.stop.z, 2.6)) { m.visible = false; CR.st = 'leave'; CR.t = 0; } }
+  }
+
+  /* ---------- Maps and GPS ---------- */
+  const PLACES = []; // {name, icon, x, z}
+  function places() {
+    const [mx, mz] = E.lotC(...E.RP_LOTS.market), [tx, tz] = E.lotC(...E.RP_LOTS.biz), [gx, gz] = E.lotC(1, 1, 0, 0);
+    const list = [{ name: 'Business Tower', icon: '🏢', x: tx, z: tz + 14 }, { name: 'LSP Market', icon: '🛒', x: mx - 1, z: mz + 9 }, { name: 'Garage', icon: '🔧', x: gx, z: gz }];
+    if (S.home != null) { const g = curHouse().group.position; list.unshift({ name: 'Home', icon: '🏠', x: g.x - 6.3, z: g.z - 3 }); }
+    return list.concat(PLACES);
+  }
+  function setGps(p) { S.gps = p ? { name: p.name, icon: p.icon, x: p.x, z: p.z } : null; save(); gpsHud(); if (p) say(`📍 GPS set: ${p.icon} ${p.name}`); }
+  function gpsHud() {
+    const el = $('#rp-gps'); if (!el) return; const g = S && S.gps; el.hidden = !g; if (!g) { if (D3.beam) D3.beam.visible = false; return; }
+    const me = E.G.mode === 'drive' ? E.getP() : E.getF(), dx = g.x - me.x, dz = g.z - me.z, d = Math.hypot(dx, dz);
+    if (d < 10 && !(me.y > 20)) { say(`📍 You arrived at ${g.icon} ${g.name}`); S.gps = null; el.hidden = true; if (D3.beam) D3.beam.visible = false; return; }
+    const head = E.G.mode === 'drive' ? me.h : me.h, rel = wrapA(Math.atan2(dx, dz) - head), arrows = ['⬆️', '↗️', '➡️', '↘️', '⬇️', '↙️', '⬅️', '↖️'];
+    const idx = ((Math.round(-rel / (Math.PI / 4)) % 8) + 8) % 8;
+    el.textContent = `${arrows[idx]} ${g.icon} ${g.name} · ${d > 1000 ? (d / 1000).toFixed(1) + ' km' : Math.round(d) + ' m'}`;
+    if (!D3.beam) { D3.beam = new E.T.Mesh(new E.T.CylinderGeometry(1.2, 1.2, 120, 16, 1, true), new E.T.MeshBasicMaterial({ color: '#ffb31a', transparent: true, opacity: 0.35, depthWrite: false, side: E.T.DoubleSide })); E.scene.add(D3.beam); }
+    D3.beam.visible = true; D3.beam.position.set(g.x, 60, g.z);
+  }
+  function mapHtml() {
+    return `<canvas id="rp-mapcv" width="600" height="600" style="width:100%;border-radius:12px;background:#7fb66a;touch-action:none"></canvas><p class="muted" style="font-size:12px;margin:6px 0">Tap a place to set the GPS.</p>${places().map((p, i) => `<button class="rp-row" data-gps="${i}" style="width:100%;border:0;cursor:pointer;text-align:left"><span style="font-size:22px">${p.icon}</span><b style="flex:1">${p.name}</b><span class="muted">${distTo(p)}</span></button>`).join('')}${S.gps ? '<button class="btn ghost" data-gps="off">✕ Stop GPS</button>' : ''}`;
+  }
+  const distTo = (p) => { const me = E.G.mode === 'drive' ? E.getP() : E.getF(), d = Math.hypot(p.x - me.x, p.z - me.z); return d > 1000 ? (d / 1000).toFixed(1) + ' km' : Math.round(d) + ' m'; };
+  function drawMap() {
+    const cv = $('#rp-mapcv'); if (!cv) return; const g = cv.getContext('2d'), W = 600, x0 = -245, x1 = 345, z0 = -245, z1 = 480, sc = W / Math.max(x1 - x0, z1 - z0), off = (W - (x1 - x0) * sc) / 2;
+    // same orientation as the minimap: north (+z) up, +x to the left
+    const X = (x) => (x1 - x) * sc + off, Z = (z) => (z1 - z) * sc, R = (ax, az, bx, bz) => g.fillRect(X(Math.max(ax, bx)), Z(Math.max(az, bz)), Math.abs(bx - ax) * sc, Math.abs(bz - az) * sc);
+    g.fillStyle = '#7fb66a'; g.fillRect(0, 0, W, W); g.fillStyle = '#b48a5c'; R(223, -236, 332, 236);
+    g.fillStyle = '#c3c8d0'; for (let bx = 0; bx < 6; bx++) for (let bz = 0; bz < 6; bz++) R(E.RX(bx) + 7, E.RX(bz) + 7, E.RX(bx) + 65, E.RX(bz) + 65);
+    g.fillStyle = 'rgba(214,31,48,.45)'; R(E.TURF.x0, E.TURF.z0, E.TURF.x1, E.TURF.z1);
+    g.fillStyle = '#4d525b'; for (let i = 0; i <= 6; i++) { R(-223, E.RX(i) - 7, 223, E.RX(i) + 7); R(E.RX(i) - 7, -223, E.RX(i) + 7, 223); }
+    R(-7, 216, 7, 300);
+    EXT.forEach((m) => m.drawMap && m.drawMap(g, R, X, Z, sc));
+    g.font = '22px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (const p of places()) if (p.x > x0 && p.x < x1 && p.z > z0 && p.z < z1) { g.fillStyle = '#fff'; g.beginPath(); g.arc(X(p.x), Z(p.z), 15, 0, 7); g.fill(); g.fillText(p.icon, X(p.x), Z(p.z) + 1); }
+    if (S.gps) { g.strokeStyle = '#ffb31a'; g.lineWidth = 4; g.beginPath(); g.arc(X(S.gps.x), Z(S.gps.z), 19, 0, 7); g.stroke(); }
+    const me = E.G.mode === 'drive' ? E.getP() : E.getF(); g.save(); g.translate(X(me.x), Z(me.z)); g.rotate(-me.h); g.fillStyle = '#2f6bff'; g.beginPath(); g.moveTo(0, -12); g.lineTo(8, 9); g.lineTo(-8, 9); g.closePath(); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke(); g.restore();
+    cv.onclick = (e) => { const r = cv.getBoundingClientRect(), px = ((e.clientX - r.left) / r.width) * W, pz = ((e.clientY - r.top) / r.height) * W; let best = null; for (const p of places()) { const d = Math.hypot(X(p.x) - px, Z(p.z) - pz); if (d < 30 && (!best || d < best.d)) best = { d, p }; } if (best) { setGps(best.p); openPhone('maps'); } };
+  }
+
+  const orderStatus = (o) => { if (o.done) return ['Delivered', 100]; if (o.out) return [CR.st === 'wait' ? 'Delivery partner is at ' + dropPoint().name : 'Out for delivery', 96]; const f = (absMin() - o.at) / (o.eta - o.at); return [f < 0.25 ? 'Order placed' : f < 0.6 ? 'Shipped' : 'Out for delivery', Math.round(f * 100)]; };
   const etaTxt = (o) => { const m = Math.max(0, o.eta - absMin()); return m < 60 ? `${Math.ceil(m)} min` : m < DAY_MIN ? `${Math.ceil(m / 60)} h` : `${Math.ceil(m / DAY_MIN)} days`; };
   function ordersHtml() {
     const os = S.orders || [];
-    return os.length ? os.map((o) => { const p = PRODUCTS.find((q) => q.id === o.pid) || { icon: '📦', name: o.pid }, [st, pc] = orderStatus(o); return `<div class="rp-row"><span style="font-size:24px">${p.icon}</span><div style="flex:1"><b>${p.name}</b><div class="muted" style="font-size:12px">#${o.id} · ${st}${o.done ? '' : ' · ' + etaTxt(o)}</div><div class="bar" style="height:6px;background:#e1e6ef;border-radius:4px;margin-top:4px"><i style="display:block;height:100%;width:${pc}%;background:#14c79a;border-radius:4px"></i></div></div></div>`; }).join('') : '<p class="muted">No orders yet. Shop on the LSP Store!</p>';
+    return os.length ? os.map((o) => { const p = PRODUCTS.find((q) => q.id === o.pid) || { icon: '📦', name: o.pid }, [st, pc] = orderStatus(o); return `<div class="rp-row"><span style="font-size:24px">${p.icon}</span><div style="flex:1"><b>${p.name}</b><div class="muted" style="font-size:12px">#${o.id} · ${st}${o.done || o.out ? '' : ' · ' + etaTxt(o)}</div>${o.out && !o.done ? `<div style="font:700 15px ui-monospace,monospace;color:#2f6bff;margin-top:2px">🔐 OTP ${o.otp}</div>` : ''}<div class="bar" style="height:6px;background:#e1e6ef;border-radius:4px;margin-top:4px"><i style="display:block;height:100%;width:${pc}%;background:#14c79a;border-radius:4px"></i></div></div></div>`; }).join('') : '<p class="muted">No orders yet. Shop on the LSP Store!</p>';
   }
   function bankHtml() {
     const c = S.card;
@@ -566,7 +667,7 @@
   function openPhone(app) {
     stopAct(); if (shift) return;
     const ph = phoneP(), color = ph ? ph.phone : '#3a4566', name = ph ? ph.name : 'LSP Starter';
-    const APPS = [['upi', '📲', 'LSP UPI'], ['wallet', '👛', 'Wallet'], ['store', '🛍️', 'LSP Store'], ['orders', '📦', 'Orders'], ['biz', '🏢', 'Business'], ['stuff', '🎒', 'My stuff'], ['notes', '🔔', 'Alerts']];
+    const APPS = [['upi', '📲', 'LSP UPI'], ['wallet', '👛', 'Wallet'], ['store', '🛍️', 'LSP Store'], ['orders', '📦', 'Orders'], ['biz', '🏢', 'Business'], ['stuff', '🎒', 'My stuff'], ['notes', '🔔', 'Alerts'], ['maps', '🗺️', 'Maps'], ...EXT.flatMap((m) => (m.apps || []).map((a) => [a.id, a.icon, a.label]))];
     let body = '';
     if (!app) body = `<div class="ph-apps">${APPS.map(([id, ic, l]) => `<button data-papp="${id}"><span>${ic}</span>${l}</button>`).join('')}</div>`;
     else if (app === 'upi') body = `<div class="ph-bal"><small>LSP UPI balance</small><b>${fmt$(S.cash)}</b><small>${(window.Social && Social.me()) || 'you'}@lspupi</small></div><p class="muted" style="font-size:12px;margin:6px 0">Scan & pay at shops and stalls. Customers pay you by scanning your QR.</p>${(S.txns || []).slice(0, 25).map((t) => `<div class="rp-row"><div style="flex:1"><b style="font-size:13px">${t.label}</b><div class="muted" style="font-size:11px">Day ${t.day} · ${t.at}</div></div><b style="color:${t.amt >= 0 ? '#14c79a' : '#ff4d5e'}">${t.amt >= 0 ? '+' : '−'}${fmt$(Math.abs(t.amt))}</b></div>`).join('') || '<p class="muted">No payments yet.</p>'}`;
@@ -576,12 +677,16 @@
     else if (app === 'biz') body = Object.keys(S.biz || {}).length ? Object.entries(S.biz).map(([id, o]) => { const b = BIZ.find((q) => q.id === id); return `<div class="rp-row"><span style="font-size:24px">${b.icon}</span><div style="flex:1"><b>${o.name}</b><div class="muted" style="font-size:11px;font-family:ui-monospace,monospace">TAXIN ${o.taxin}</div><div class="muted" style="font-size:12px">Floor ${o.floor} · Lv ${o.lv} · ${o.sales || 0} sales · made ${fmt$(o.made || 0)}</div></div><b>${fmt$(o.bank)}</b></div>`; }).join('') + '<p class="muted" style="font-size:12px">Collect and upgrade at Business Tower reception or on a laptop.</p>' : '<p class="muted">No business yet. Go to the 🏢 Business Tower and register one for free.</p>';
     else if (app === 'stuff') body = (S.stuff || []).length ? S.stuff.map((it, k) => { const p = PRODUCTS.find((q) => q.id === it.id); return `<div class="rp-row"><span style="font-size:24px">${it.icon}</span><div style="flex:1"><b>${it.name}</b> ×${it.n}</div>${p && p.use ? `<button class="btn primary" data-use="${k}" style="height:34px;font-size:13px">Use</button>` : ''}</div>`; }).join('') : '<p class="muted">Your bag is empty. Things you buy show up here.</p>';
     else if (app === 'notes') body = (S.notes || []).map((n) => `<div class="rp-row"><div><b style="font-size:13px">${n.m}</b><div class="muted" style="font-size:11px">Day ${n.day} · ${n.at}</div></div></div>`).join('') || '<p class="muted">No alerts.</p>';
+    else if (app === 'maps') body = mapHtml();
+    else { const xa = EXT.flatMap((m) => m.apps || []).find((a) => a.id === app); if (xa) body = xa.html(); }
     const title = app ? APPS.find((a) => a[0] === app) : null;
     openUi(`<div class="ph" style="--ph:${color}"><div class="ph-bar"><span>${clockTxt()}</span><span>${name}</span><span>📶 🔋</span></div><div class="ph-top">${app ? '<button data-papp="" class="ph-back">‹</button>' : ''}<b>${title ? title[1] + ' ' + title[2] : '📱 Home'}</b><button class="x" data-ui="close">✕</button></div><div class="ph-body">${body}</div></div>`);
     $('#rp-win').classList.add('phone');
     $$('#rp-win [data-papp]').forEach((x) => (x.onclick = () => openPhone(x.dataset.papp || null)));
     if (app === 'store') wireStore((c, q) => { if (c) D3.cat = c; D3.q = q; openPhone('store'); });
     if (app === 'wallet') wireBank(() => openPhone('wallet'));
+    if (app === 'maps') { drawMap(); $$('#rp-win [data-gps]').forEach((b) => (b.onclick = () => { if (b.dataset.gps === 'off') setGps(null); else setGps(places()[+b.dataset.gps]); openPhone('maps'); })); }
+    { const xa = EXT.flatMap((m) => m.apps || []).find((a) => a.id === app); if (xa && xa.wire) xa.wire(); }
     $$('#rp-win [data-use]').forEach((x) => (x.onclick = () => { const it = S.stuff[+x.dataset.use], p = PRODUCTS.find((q) => q.id === it.id); closeUi(); activity('use', `Using your ${it.name.toLowerCase()}`, 5, Object.fromEntries(Object.entries(p.use).map(([k, v]) => [k, v / 5]))); }));
   }
 
@@ -693,6 +798,11 @@
       }
       F.x = px + ox; F.z = pz + oz;
   }
+  /* ---------- extensions (city buildings, mafia, airport) plug in here ---------- */
+  const EXT = []; let KIT = null;
+  function makeKit() {
+    return { get E() { return E; }, get S() { return S; }, Y0, OBJ, BUILD, obj, building, adapter, insideB, pushCols, openUi, closeUi, isUi: () => ui, say, notify, toast: (m, t) => toast(m, t), fmt$, save, hud, pay, canPay, receive, txn, cardLeft, addStuff, addNeeds, activity, stopAct, showQR, openPhone, openLaptop, setGps, places: PLACES, absMin, clockTxt, hour, curHouse, wrapA, clamp, T3, goFloor, tower: () => T3, enterCity: () => RP.enter() };
+  }
   /* ---------- the module LSP Drive calls ---------- */
   const RP = (window.LSPDriveRP = {
     ready: false,
@@ -703,7 +813,7 @@
       E.RP_LOTS.houses.forEach((_, i) => buildHouse(i));
       buildMarket(); buildTower(); fixBiz();
       const scr = $('#s-drive');
-      $('#s-drive .hud').insertAdjacentHTML('beforeend', '<span class="hudpill" id="rp-cash">$0</span><span class="hudpill" id="rp-clock"></span><span class="hudpill" id="rp-needs" title="Hunger, energy, hygiene, fun"></span><span class="hudpill" id="rp-cart" hidden></span><button class="hudpill" id="rp-phone" title="Your phone (M)">📱</button>');
+      $('#s-drive .hud').insertAdjacentHTML('beforeend', '<span class="hudpill" id="rp-cash">$0</span><span class="hudpill" id="rp-clock"></span><span class="hudpill" id="rp-needs" title="Hunger, energy, hygiene, fun"></span><span class="hudpill" id="rp-cart" hidden></span><button class="hudpill" id="rp-phone" title="Your phone (M)">📱</button><span class="hudpill" id="rp-gps" hidden></span>');
       $('#rp-phone').onclick = () => (ui ? closeUi() : openPhone());
       addEventListener('keydown', (e) => { if (e.code === 'KeyM' && L.isActive('s-drive') && !/INPUT|TEXTAREA/.test((e.target && e.target.tagName) || '')) { e.preventDefault(); ui ? $('#rp-win').classList.contains('phone') && closeUi() : openPhone(); } });
       scr.insertAdjacentHTML('beforeend', '<div class="lf-act" id="rp-act" hidden><span id="rp-act-t"></span><div class="bar"><i id="rp-act-b" style="width:0%"></i></div><button id="rp-act-x">Stop</button></div><div class="lf-ui" id="rp-ui" hidden><div class="lf-win" id="rp-win"></div></div>');
@@ -725,17 +835,23 @@
 #rp-qr{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:40}#rp-qr[hidden]{display:none}
 .qr-card{background:#fff;border-radius:18px;padding:14px 18px;display:flex;flex-direction:column;align-items:center;gap:6px;box-shadow:0 14px 40px #0008;color:#16203d;font:14px system-ui}
 .qr-grid{display:grid;grid-template-columns:repeat(11,12px);gap:0;border:6px solid #fff;outline:2px solid #16203d}.qr-grid i{width:12px;height:12px;display:block}
-.qr-amt{font:700 28px Fredoka,system-ui}.qr-st{font-weight:700;color:#6b7591}`; document.head.appendChild(st);
+.qr-amt{font:700 28px Fredoka,system-ui}.qr-st{font-weight:700;color:#6b7591}
+.otp-in{display:flex;gap:8px;justify-content:center;margin:12px 0}.otp-in i{width:44px;height:52px;border-radius:10px;border:2px solid #2f6bff;display:grid;place-items:center;font:700 26px ui-monospace,monospace;font-style:normal;background:#fff;color:#16203d}
+.otp-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.otp-pad button{height:48px;border-radius:12px;border:1px solid #d9dee8;background:#fff;font:700 20px system-ui;cursor:pointer;color:#16203d}
+#rp-hp{background:#ff4d5e;color:#fff}`; document.head.appendChild(st);
       $('#rp-ui').addEventListener('pointerdown', (e) => { if (e.target.id === 'rp-ui' && !shift) closeUi(); });
       addEventListener('keydown', (e) => { if (ui && e.code === 'Escape' && !shift && L.isActive('s-drive')) { e.stopImmediatePropagation(); closeUi(); } }, true);
       D3.hemi = E.scene.children.find((o) => o.isHemisphereLight); D3.bg = E.scene.background; D3.night = new E.T.Color('#0c1630'); D3.fog = E.scene.fog.color.clone();
       D3.lamp = E.M('#fffbe6', { emissive: '#fff1c2', emissiveIntensity: 0.6 });
       setHouseState(); RP.ready = true; hud();
+      KIT = makeKit(); for (const m of EXT) try { m.build && m.build(KIT); } catch (e) { console.error('drive ext', e); }
     },
-    enter() { S = DB.load(); if (S.home === undefined) S.home = null; fixBiz(); const F = E.getF(); F.tower = 0; if (T3.hall) T3.hall.visible = false; setHouseState(); hud(); if (S.home == null) setTimeout(() => toast(`🏠 You have ${fmt$(S.cash)} and no house yet. Houses for sale are next to your garage. Register a free business at the 🏢 Business Tower, work on its public computers, do deliveries, then buy a house! Press M for your phone.`, 6500), 2500); },
-    leave() { stopAct(); closeUi(); cart = []; if (shift) shift = null; save(); },
-    blocked: () => ui || !!(act && act.spot),
-    inside() { const F = E.getF(); return E.G.mode === 'foot' && BUILD.some((b) => insideB(b, F.x, F.z)); },
+    ext(m) { EXT.push(m); if (KIT && m.build) try { m.build(KIT); } catch (e) { console.error('drive ext', e); } },
+    noCol: () => EXT.some((m) => m.noCol && m.noCol()),
+    enter() { S = DB.load(); if (S.home === undefined) S.home = null; fixBiz(); const F = E.getF(); F.tower = 0; if (T3.hall) T3.hall.visible = false; setHouseState(); hud(); EXT.forEach((m) => m.enter && m.enter()); if (S.home == null) setTimeout(() => toast(`🏠 You have ${fmt$(S.cash)} and no house yet. Houses for sale are next to your garage. Register a free business at the 🏢 Business Tower, work on its public computers, do deliveries, then buy a house! Press M for your phone.`, 6500), 2500); },
+    leave() { EXT.forEach((m) => m.leave && m.leave()); stopAct(); closeUi(); cart = []; if (shift) shift = null; save(); },
+    blocked: () => ui || !!(act && act.spot) || EXT.some((m) => m.blocked && m.blocked()),
+    inside() { const F = E.getF(); return E.G.mode === 'foot' && (BUILD.some((b) => insideB(b, F.x, F.z)) || EXT.some((m) => m.inside && m.inside())); },
     _tp(x, z) { const F = E.getF(); F.x = x; F.z = z; F.vx = F.vz = 0; },
     _S: () => S,
     _F: () => E.getF(),
@@ -744,7 +860,7 @@
     nearest() {
       const F = E.getF(); let best = null, bd = 1e9;
       for (const o of OBJ) {
-        if (o.need && !has(o.need)) continue; if (o.tier != null && design().tier < o.tier) continue; if (o.tower != null && (o.tower === 'hall' ? !F.tower : F.tower || !insideB(T3.b, F.x, F.z))) continue; if (o.floor != null && o.floor !== (F.floor || 0)) continue; if (o.where === 'home' && (S.home == null || !insideB(curHouse(), o.x, o.z))) continue;
+        if (o.when && !o.when()) continue; if (o.need && !has(o.need)) continue; if (o.tier != null && design().tier < o.tier) continue; if (o.tower != null && (o.tower === 'hall' ? !F.tower : F.tower || !insideB(T3.b, F.x, F.z))) continue; if (o.floor != null && o.floor !== (F.floor || 0)) continue; if (o.where === 'home' && (S.home == null || !insideB(curHouse(), o.x, o.z))) continue;
         const d = Math.hypot(o.x - F.x, o.z - F.z); if (d < o.r && d < bd) { bd = d; best = o; }
       }
       return best;
@@ -758,6 +874,7 @@
       o.use(); return true;
     },
     cam(camera, dt) {
+      for (const m of EXT) if (m.cam && m.cam(camera, dt)) return true;
       const F = E.getF(), b = BUILD.find((q) => insideB(q, F.x, F.z));
       if (!b) { D3.ch = D3.cp = null; return false; }
       D3.ch = D3.ch == null ? F.h : D3.ch + wrapA(F.h - D3.ch) * Math.min(1, dt * 5);
@@ -775,6 +892,7 @@
         F.y = F.flyY; F.floor = 0; F.stairs = false; return;
       }
       F.flyY = null;
+      for (const m of EXT) if (m.foot && m.foot(F, dt, gy)) return;
       if (T3.b && insideB(T3.b, F.x, F.z)) { F.floor = 0; F.stairs = false; F.tower = F.tower || 0; F.y = F.tower ? hallY(F.tower) : Y0; pushCols(F, T3.g.position.x, T3.g.position.z, F.tower ? TOWER_COLS.hall : TOWER_COLS.lobby); return; }
       if (F.tower) { F.tower = 0; if (T3.hall) T3.hall.visible = false; }
       const b = BUILD.find((q) => q.house != null && insideB(q, F.x, F.z));
@@ -811,11 +929,11 @@
       if (act && act.spot) { F.x = act.spot.x; F.z = act.spot.z; F.h = act.spot.face; F.vx = F.vz = 0; }
       // locked doors on houses that aren't yours
       for (const b of BUILD) if (b.house != null && b.locked) { const c = b.doorCol; if (F.x > c.x0 - 0.35 && F.x < c.x1 + 0.35 && Math.abs(F.z - (c.z0 + c.z1) / 2) < 0.4) F.z = (c.z0 + c.z1) / 2 + (F.z < (c.z0 + c.z1) / 2 ? -0.4 : 0.4); }
-      tickTower(dt);
-      tick -= dt; if (tick <= 0) { tick = 1; deliverOrders(); hud(); if (Math.floor(S.time) % 180 < 2) { const low = NEEDS.find(([n]) => S.needs[n] < 15); if (low) say({ hunger: '🍔 You are hungry. Eat at home!', energy: '⚡ You are tired. Go to bed at home.', hygiene: '🫧 You need a shower.', fun: '🎉 You are bored. Go for a drive!' }[low[0]]); } if (Math.floor(S.time) % 60 < 2) save(); }
+      tickTower(dt); tickCourier(dt); EXT.forEach((m) => m.tick && m.tick(dt));
+      tick -= dt; if (tick <= 0) { tick = 1; deliverOrders(); hud(); gpsHud(); if (Math.floor(S.time) % 180 < 2) { const low = NEEDS.find(([n]) => S.needs[n] < 15); if (low) say({ hunger: '🍔 You are hungry. Eat at home!', energy: '⚡ You are tired. Go to bed at home.', hygiene: '🫧 You need a shower.', fun: '🎉 You are bored. Go for a drive!' }[low[0]]); } if (Math.floor(S.time) % 60 < 2) save(); }
     },
     frame(dt) {
-      if (!S) return; const F = E.getF(), now = performance.now() / 1000;
+      if (!S) return; const F = E.getF(), now = performance.now() / 1000; EXT.forEach((m) => m.frame && m.frame(dt));
       // poses for sitting and lying
       if (E.G.mode === 'foot' && act && act.spot && F.m) {
         const u = F.m.userData;

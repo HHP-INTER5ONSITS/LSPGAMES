@@ -54,7 +54,8 @@
   const CELL = 72, ROAD = 14, HALF = ROAD / 2, NB = 6, R0 = -216, LANE = 3.5;
   const RX = (i) => R0 + i * CELL;
   const PARK_X0 = 223;
-  const BOUND = { x0: -236, x1: 332, z0: -236, z1: 236 };
+  // the city ends at z = 236; south of it, through a gap in the fence, is the airport
+  const CITY_Z1 = 236, BOUND = { x0: -236, x1: 332, z0: -236, z1: 470 };
   const TAU = Math.PI * 2;
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -63,7 +64,7 @@
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   const ord = (n) => n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
   // Brookhaven-style lots: three houses to claim and a supermarket (see drive-rp.js)
-  const RP_LOTS = { houses: [[1, 1, 1, 0], [1, 1, 1, 1], [1, 1, 0, 1]], market: [2, 1, 0, 1], biz: [2, 1, 1, 1] };
+  const RP_LOTS = { houses: [[1, 1, 1, 0], [1, 1, 1, 1], [1, 1, 0, 1]], market: [2, 1, 0, 1], biz: [2, 1, 1, 1], mafia: [3, 1, 1, 1], vipers: [[4, 2, 0, 0], [4, 2, 1, 1], [5, 2, 1, 0]] };
   const RPX = () => window.LSPDriveRP && window.LSPDriveRP.ready ? window.LSPDriveRP : null;
   const lotC = (bx, bz, lx, lz) => [RX(bx) + HALF + 14.5 + lx * 29, RX(bz) + HALF + 14.5 + lz * 29];
   const PARKS = ['3,0', '0,4'];
@@ -507,7 +508,7 @@
   const TCOLORS = ['#f2f3f5', '#c9ccd3', '#15171c', '#8a1c22', '#1f4e8c', '#5a6472', '#7d5a3c', '#2f6b4f', '#e3d3b4'];
 
   /* ---- world ---- */
-  const WORLD = { lamps: [] };
+  const WORLD = { lamps: [] }, CITY_BLDGS = [];
   function buildWorld() {
     const cv = $('#drive-cv'), touch = LSPG.isTouch();
     renderer = new T.WebGLRenderer({ canvas: cv, antialias: !touch, powerPreference: 'high-performance' });
@@ -569,7 +570,7 @@
     }
     const roofGeos = [], walkGeos = [], parkGeos = [], trees = [], lamps = [];
     const R = LSPG.rng(20260);
-    const special = new Set([...HIDEOUTS.map((h) => h.x + ',' + h.z), GARAGE.x + ',' + GARAGE.z, ...[...RP_LOTS.houses, RP_LOTS.market, RP_LOTS.biz].map((l) => lotC(...l).join(','))]);
+    const special = new Set([...HIDEOUTS.map((h) => h.x + ',' + h.z), GARAGE.x + ',' + GARAGE.z, ...[...RP_LOTS.houses, RP_LOTS.market, RP_LOTS.biz, RP_LOTS.mafia, ...RP_LOTS.vipers].map((l) => lotC(...l).join(','))]);
     for (let bx = 0; bx < NB; bx++) for (let bz = 0; bz < NB; bz++) {
       const x0 = RX(bx) + HALF, z0 = RX(bz) + HALF, S = CELL - ROAD, cx = x0 + S / 2, cz = z0 + S / 2;
       const sw = new T.BoxGeometry(S, 0.16, S); sw.translate(cx, 0.08, cz); walkGeos.push(sw);
@@ -596,7 +597,7 @@
         g.translate(px, h / 2 + 0.16, pz); p.geos.push(g);
         const rg = new T.BoxGeometry(w - 1.2, 0.7, dd - 1.2); rg.translate(px, h + 0.16 + 0.35, pz); roofGeos.push(rg);
         if (R() < 0.5) { const ac = new T.BoxGeometry(2.4, 1.4, 2.4); ac.translate(px + (R() - 0.5) * (w - 6), h + 0.16 + 1.2, pz + (R() - 0.5) * (dd - 6)); roofGeos.push(ac); }
-        addCol(px - w / 2, pz - dd / 2, px + w / 2, pz + dd / 2);
+        addCol(px - w / 2, pz - dd / 2, px + w / 2, pz + dd / 2); CITY_BLDGS.push({ x: px, z: pz, w, d: dd, h, turf, bx, bz, lx, lz });
         if (R() < 0.35) { const side = R() < 0.5 ? 1 : -1; trees.push([px + side * (w / 2 + 2.2), pz + (R() - 0.5) * 10, 0.7]); }
       }
     }
@@ -642,8 +643,8 @@
 
     // off-road park
     {
-      const W = BOUND.x1 + 4 - PARK_X0, H = BOUND.z1 - BOUND.z0 + 8, cx = PARK_X0 + W / 2;
-      const g = new T.PlaneGeometry(W, H, Math.round(W / 1.5), Math.round(H / 1.5)); g.rotateX(-Math.PI / 2); g.translate(cx, 0, 0);
+      const W = BOUND.x1 + 4 - PARK_X0, H = CITY_Z1 - BOUND.z0 + 8, cx = PARK_X0 + W / 2;
+      const g = new T.PlaneGeometry(W, H, Math.round(W / 1.5), Math.round(H / 1.5)); g.rotateX(-Math.PI / 2); g.translate(cx, 0, (BOUND.z0 + CITY_Z1) / 2);
       const p = g.attributes.position, col = new Float32Array(p.count * 3), c = new T.Color(), dirt = new T.Color('#a8794a'), dark = new T.Color('#7d5634'), green = new T.Color('#6ea85a'), wood = new T.Color('#c89b5e');
       for (let i = 0; i < p.count; i++) {
         const x = p.getX(i), z = p.getZ(i), h = ground(x, z); p.setY(i, h);
@@ -663,16 +664,20 @@
     // boundary barriers
     const bar2 = M('#c7cbd2');
     box(BOUND.x1 - BOUND.x0 + 4, 1.2, 1, bar2, (BOUND.x0 + BOUND.x1) / 2, 0.6, BOUND.z0 - 0.5, scene);
-    box(BOUND.x1 - BOUND.x0 + 4, 1.2, 1, bar2, (BOUND.x0 + BOUND.x1) / 2, 0.6, BOUND.z1 + 0.5, scene);
-    box(1, 1.2, BOUND.z1 - BOUND.z0, bar2, BOUND.x0 - 0.5, 0.6, 0, scene);
-    box(1, 9, BOUND.z1 - BOUND.z0, M('#9a8a73'), BOUND.x1 + 0.5, 2, 0, scene);
+    // south fence with a gap for the airport road at x = 0
+    box(-HALF - BOUND.x0, 1.2, 1, bar2, (BOUND.x0 - HALF) / 2, 0.6, CITY_Z1 + 0.5, scene); addCol(BOUND.x0 - 2, CITY_Z1, -HALF, CITY_Z1 + 1);
+    box(BOUND.x1 - HALF + 4, 1.2, 1, bar2, (BOUND.x1 + HALF) / 2, 0.6, CITY_Z1 + 0.5, scene); addCol(HALF, CITY_Z1, BOUND.x1 + 2, CITY_Z1 + 1);
+    addCol(PARK_X0 - 8, CITY_Z1, BOUND.x1 + 2, BOUND.z1 + 2); // the park doesn't reach the airport
+    box(1, 1.2, BOUND.z1 - BOUND.z0, bar2, BOUND.x0 - 0.5, 0.6, (BOUND.z0 + BOUND.z1) / 2, scene);
+    box(1, 9, CITY_Z1 - BOUND.z0, M('#9a8a73'), BOUND.x1 + 0.5, 2, (BOUND.z0 + CITY_Z1) / 2, scene);
+    box(PARK_X0 - 8 - BOUND.x0, 1.2, 1, bar2, (BOUND.x0 + PARK_X0 - 8) / 2, 0.6, BOUND.z1 + 0.5, scene); box(1, 1.2, BOUND.z1 - CITY_Z1, bar2, PARK_X0 - 8.5, 0.6, (CITY_Z1 + BOUND.z1) / 2, scene);
     // distant hills
     for (let i = 0; i < 36; i++) {
       const a = (i / 36) * TAU + Math.random() * 0.1, r = 560 + Math.random() * 80, h = 50 + Math.random() * 110;
       const c = new T.Mesh(new T.ConeGeometry(70 + Math.random() * 70, h, 7), M('#6d8f7a', { flatShading: true })); c.position.set(Math.cos(a) * r, h / 2 - 4, Math.sin(a) * r); scene.add(c);
     }
     initFx();
-    if (window.LSPDriveRP) try { window.LSPDriveRP.build({ T, scene, camera, sun, M, box, canvasTex, textSprite, person, puff, addCol, lotC, RP_LOTS, G, getP: () => P, getF: () => F, K, TIN, pop, sfx }); } catch (e) { console.error('roleplay world', e); }
+    if (window.LSPDriveRP) try { window.LSPDriveRP.build({ T, scene, camera, sun, M, box, canvasTex, textSprite, person, puff, addCol, lotC, RP_LOTS, G, getP: () => P, getF: () => F, K, TIN, pop, sfx, BOUND, CITY_Z1, solidAt, merge, CITY_BLDGS, ground, RX, HALF, TURF, wreckFx: (x, z) => { for (let i = 0; i < 18; i++) puff(x + rand(-4, 4), rand(0.5, 6), z + rand(-4, 4), i % 2 ? '#3a3a3a' : '#ff8a3d', 3, 1.6, rand(-2, 2), rand(1, 4), rand(-2, 2), 2.5, 0.7); }, getHeat: () => G.heat }); } catch (e) { console.error('roleplay world', e); }
     buildMiniBase();
     addEventListener('resize', resize);
   }
@@ -1195,7 +1200,7 @@
     const mv = inp.thr ? 1 : inp.brk ? -0.6 : 0, fx = Math.sin(F.h), fz = Math.cos(F.h);
     F.vx += (fx * mv * sp - F.vx) * Math.min(1, dt * 10); F.vz += (fz * mv * sp - F.vz) * Math.min(1, dt * 10);
     F.x += F.vx * dt; F.z += F.vz * dt; F.walk += Math.hypot(F.vx, F.vz) * dt * 2.2;
-    if (!window.LSPG_FLY) collideWorld(F, F.x, F.z, 0.4); // admins flying go through walls
+    if (!window.LSPG_FLY && !(RPX() && RPX().noCol())) collideWorld(F, F.x, F.z, 0.4); // admins flying go through walls
     F.y = ground(F.x, F.z);
     if (RPX()) RPX().foot(F, dt, F.y);
     F.hitT -= dt; F.hp = Math.min(100, F.hp + dt * 3);

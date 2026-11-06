@@ -11,7 +11,7 @@
   'use strict';
   const isAdmin = () => { try { return !!(profile && profile.admin); } catch (e) { return false; } };
   const num = (v, d) => { const n = Math.floor(Number(String(v || '').replace(/[,$]/g, ''))); return n > 0 ? n : d; };
-  const HELP = 'sudo money [n] · sudo points [n] · sudo ban <player> · sudo unban <player> · sudo fly · sudo killbots';
+  const HELP = 'sudo money [n] · sudo points [n] · sudo ban <player> · sudo unban <player> · sudo fly · sudo killbots · sudo npm join tower';
 
   async function run(line) {
     if (!isAdmin()) return 'Only the admin account can use sudo.';
@@ -35,8 +35,14 @@
       return r.banned ? `🔨 ${r.username} is banned.` : `✅ ${r.username} is unbanned.`;
     }
     if (c === 'fly') { window.LSPG_FLY = !window.LSPG_FLY; return window.LSPG_FLY ? '🕊️ Fly ON. In LSP Drive get out of the car: Space or Q up, X or Z down. Walls don\'t stop you.' : '🕊️ Fly OFF.'; }
+    if (c === 'npm') {
+      if (!/^join\b/i.test(arg)) return 'Try: sudo npm join tower';
+      if (!window.LSPDriveCity) return 'Open LSP Drive first.';
+      return LSPDriveCity.join(true) ? '🕴️ You joined the Mafia Tower. Press G in LSP Drive for your rifle.' : 'Open LSP Drive first, or you are already in the Mafia.';
+    }
     if (c === 'killbots' || c === 'win' || c === 'defeat') {
       let n = 0;
+      try { if (window.LSPDriveCity) n += LSPDriveCity.killAll(); } catch (e) {}
       try { if (typeof M !== 'undefined' && M && M.bots) for (const b of M.bots) if (!b.dead) { killBot(b); n++; } } catch (e) {}
       try { if (window.LSPDrive && LSPDrive._wreckRivals) n += LSPDrive._wreckRivals(); } catch (e) {}
       return n ? `💥 Defeated ${n} bot${n === 1 ? '' : 's'}.` : 'No bots to defeat right now. Start a game first.';
