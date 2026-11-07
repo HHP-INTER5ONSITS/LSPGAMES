@@ -72,9 +72,10 @@
     { const l = E.RP_LOTS.xhp; tower('xhp', 'xhp', E.lotC(...l), l[3] === 0 ? -1 : 1, 52, { body: '#121214', lit: '#ff3b3b', dark: '#2a2a33', trim: '#ff3b3b', title: 'VIPER XHP', titleBg: '#121214', titleFg: '#ff3b3b', door: '🔫 Viper XHP · guns, bombs, missiles', enter: '🔫 Enter Viper XHP (weapons shop)' }); const [x, z] = E.lotC(...l); K.places.push({ name: 'Viper XHP', icon: '🔫', x, z: z + (l[3] === 0 ? -14 : 14) }); }
     // rifle and fire controls
     const scr = document.querySelector('#s-drive');
-    scr.insertAdjacentHTML('beforeend', '<div id="cb-wpn"></div><div id="cb-ui" hidden><button id="cb-fire">🔫 FIRE</button><button id="cb-sw">🔁 Switch</button><button id="cb-gren">💣 Grenade</button><button id="cb-gun" title="G">Put away</button></div><div id="cb-hit" hidden></div><div id="cb-cross" hidden>+</div>');
+    scr.insertAdjacentHTML('beforeend', '<button id="cb-equip" hidden>🔫 Gun</button><div id="cb-wpn"></div><div id="cb-ui" hidden><button id="cb-fire">🔫 FIRE</button><button id="cb-sw">🔁 Switch</button><button id="cb-gren">💣 Grenade</button><button id="cb-gun" title="G">Put away</button></div><div id="cb-hit" hidden></div><div id="cb-cross" hidden>+</div>');
     const st = document.createElement('style');
-    st.textContent = `#cb-ui{position:absolute;right:16px;bottom:120px;display:flex;flex-direction:column;gap:8px;z-index:30}#cb-ui[hidden]{display:none}#cb-wpn{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(58px + env(safe-area-inset-bottom,0px));background:#111114cc;color:#fff;border:1px solid #d4af37;border-radius:12px;padding:6px 12px;font:13px system-ui;text-align:center;z-index:29;pointer-events:none}#cb-wpn:empty{display:none}#cb-sw,#cb-gren{background:#16203dcc;color:#fff;padding:8px 10px}
+    st.textContent = `#cb-ui{position:absolute;right:16px;bottom:120px;display:flex;flex-direction:column;gap:8px;z-index:30}#cb-ui[hidden]{display:none}#cb-equip{position:absolute;right:16px;bottom:120px;z-index:30;border:0;border-radius:16px;padding:12px 14px;font:700 15px system-ui;background:#111114e6;color:#d4af37;box-shadow:0 6px 20px #0006;cursor:pointer}#cb-equip[hidden]{display:none}
+#cb-wpn{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(58px + env(safe-area-inset-bottom,0px));background:#111114cc;color:#fff;border:1px solid #d4af37;border-radius:12px;padding:6px 12px;font:13px system-ui;text-align:center;z-index:29;pointer-events:none}#cb-wpn:empty{display:none}#cb-sw,#cb-gren{background:#16203dcc;color:#fff;padding:8px 10px}
 #pp{position:absolute;inset:0;z-index:66;display:grid;place-items:center;background:#000b}#pp[hidden]{display:none}.pp-in{text-align:center;color:#fff}.pp-in canvas{height:min(60vh,480px);width:auto;max-width:86vw;border-radius:12px;box-shadow:0 10px 40px #000}.pp-score{font:700 22px Fredoka,system-ui;margin-bottom:8px}
 #cb-ui button{border:0;border-radius:16px;font:700 15px system-ui;cursor:pointer;box-shadow:0 6px 20px #0006}#cb-fire{width:92px;height:92px;border-radius:50%!important;background:#d61f30;color:#fff;font-size:17px!important}#cb-gun{background:#16203dcc;color:#fff;padding:8px 10px}
 #cb-hit{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 120px 30px rgba(214,31,48,.75);z-index:25}#cb-hit[hidden]{display:none}
@@ -82,6 +83,7 @@
     document.head.appendChild(st);
     const fireBtn = document.querySelector('#cb-fire');
     fireBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); CB.hold = true; fire(true); });
+    document.querySelector('#cb-equip').onclick = () => toggleGun(true);
     document.querySelector('#cb-sw').onclick = () => cycleGun(1); document.querySelector('#cb-gren').onclick = () => throwBomb('grenade');
     addEventListener('wheel', (e) => { if (CB.armed && L.isActive('s-drive') && !K.isUi()) cycleGun(e.deltaY > 0 ? 1 : -1); }, { passive: true });
     addEventListener('pointerup', () => (CB.hold = false));
@@ -732,6 +734,7 @@
     },
     tick(dt) {
       if (!K) return; const F = E.getF(), m = M();
+      { const eq = document.querySelector('#cb-equip'), show = M().member && !CB.armed && E.G.mode === 'foot' && !K.isUi(); if (eq.hidden === show) eq.hidden = !show; }
       CB.cool -= dt; if (CB.hold && CB.armed) fire(false);
       collapseTick(dt); tickBooms(dt); tickAllies(dt);
       if (K.S.apt && K.S.apt.paidDay !== K.S.day) { K.S.apt.paidDay = K.S.day; if (!K.pay(60, '🔑 Apartment rent')) { K.notify('🔑 You could not pay rent, so you moved out of your apartment.'); K.S.apt = null; } K.save(); }
