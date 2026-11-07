@@ -64,12 +64,13 @@
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   const ord = (n) => n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
   // Brookhaven-style lots: three houses to claim and a supermarket (see drive-rp.js)
-  const RP_LOTS = { houses: [[1, 1, 1, 0], [1, 1, 1, 1], [1, 1, 0, 1]], market: [2, 1, 0, 1], biz: [2, 1, 1, 1], mafia: [3, 1, 1, 1], vipers: [[4, 2, 0, 0], [4, 2, 1, 1], [5, 2, 1, 0]] };
+  const RP_LOTS = { houses: [[1, 1, 1, 0], [1, 1, 1, 1], [1, 1, 0, 1]], market: [2, 1, 0, 1], biz: [2, 1, 1, 1], mafia: [3, 1, 1, 1], hospital: [3, 1, 0, 1], xhp: [3, 2, 0, 0], vipers: [[4, 2, 0, 0], [4, 2, 1, 1], [5, 2, 1, 0]] };
   const RPX = () => window.LSPDriveRP && window.LSPDriveRP.ready ? window.LSPDriveRP : null;
   const lotC = (bx, bz, lx, lz) => [RX(bx) + HALF + 14.5 + lx * 29, RX(bz) + HALF + 14.5 + lz * 29];
   const PARKS = ['3,0', '0,4'];
   const HIDEOUTS = [[2, 4], [4, 1], [0, 2]].map(([a, b]) => { const [x, z] = lotC(a, b, 0, 0); return { x, z }; });
   const GARAGE = (() => { const [x, z] = lotC(1, 1, 0, 0); return { x, z }; })();
+  const SPAWN = (() => { const [x, z] = lotC(3, 1, 0, 1); return { x, z: z + 13.6, cx: x + 6, cz: RX(2) - 3.5 }; })();
   const TURF = { x0: RX(4) + 5, x1: RX(6) - 5, z0: RX(2) + 5, z1: RX(3) - 5 };
   const inTurf = (x, z) => x > TURF.x0 && x < TURF.x1 && z > TURF.z0 && z < TURF.z1;
   const RAMPS = [
@@ -570,7 +571,7 @@
     }
     const roofGeos = [], walkGeos = [], parkGeos = [], trees = [], lamps = [];
     const R = LSPG.rng(20260);
-    const special = new Set([...HIDEOUTS.map((h) => h.x + ',' + h.z), GARAGE.x + ',' + GARAGE.z, ...[...RP_LOTS.houses, RP_LOTS.market, RP_LOTS.biz, RP_LOTS.mafia, ...RP_LOTS.vipers].map((l) => lotC(...l).join(','))]);
+    const special = new Set([...HIDEOUTS.map((h) => h.x + ',' + h.z), GARAGE.x + ',' + GARAGE.z, ...[...RP_LOTS.houses, RP_LOTS.market, RP_LOTS.biz, RP_LOTS.mafia, RP_LOTS.hospital, RP_LOTS.xhp, ...RP_LOTS.vipers].map((l) => lotC(...l).join(','))]);
     for (let bx = 0; bx < NB; bx++) for (let bz = 0; bz < NB; bz++) {
       const x0 = RX(bx) + HALF, z0 = RX(bz) + HALF, S = CELL - ROAD, cx = x0 + S / 2, cz = z0 + S / 2;
       const sw = new T.BoxGeometry(S, 0.16, S); sw.translate(cx, 0.08, cz); walkGeos.push(sw);
@@ -677,7 +678,7 @@
       const c = new T.Mesh(new T.ConeGeometry(70 + Math.random() * 70, h, 7), M('#6d8f7a', { flatShading: true })); c.position.set(Math.cos(a) * r, h / 2 - 4, Math.sin(a) * r); scene.add(c);
     }
     initFx();
-    if (window.LSPDriveRP) try { window.LSPDriveRP.build({ T, scene, camera, sun, M, box, canvasTex, textSprite, person, puff, addCol, lotC, RP_LOTS, G, getP: () => P, getF: () => F, K, TIN, pop, sfx, BOUND, CITY_Z1, solidAt, merge, CITY_BLDGS, ground, RX, HALF, TURF, wreckFx: (x, z) => { for (let i = 0; i < 18; i++) puff(x + rand(-4, 4), rand(0.5, 6), z + rand(-4, 4), i % 2 ? '#3a3a3a' : '#ff8a3d', 3, 1.6, rand(-2, 2), rand(1, 4), rand(-2, 2), 2.5, 0.7); }, getHeat: () => G.heat }); } catch (e) { console.error('roleplay world', e); }
+    if (window.LSPDriveRP) try { window.LSPDriveRP.build({ renderer, SPAWN, T, scene, camera, sun, M, box, canvasTex, textSprite, person, puff, addCol, lotC, RP_LOTS, G, getP: () => P, getF: () => F, K, TIN, pop, sfx, BOUND, CITY_Z1, solidAt, merge, CITY_BLDGS, ground, RX, HALF, TURF, wreckFx: (x, z) => { for (let i = 0; i < 18; i++) puff(x + rand(-4, 4), rand(0.5, 6), z + rand(-4, 4), i % 2 ? '#3a3a3a' : '#ff8a3d', 3, 1.6, rand(-2, 2), rand(1, 4), rand(-2, 2), 2.5, 0.7); }, getHeat: () => G.heat }); } catch (e) { console.error('roleplay world', e); }
     buildMiniBase();
     addEventListener('resize', resize);
   }
@@ -780,7 +781,7 @@
     if (v.dead) return; v.dead = true; boom(v.x, v.y, v.z);
     if (Math.hypot(v.x - (P ? P.x : 0), v.z - (P ? P.z : 0)) < 120) sfx('explode');
     v.m.paint.color.set('#2a2a2e'); v.ai.deadT = 0;
-    if (v === P) { SV.stats.wrecks++; save(); setTimeout(() => { if (!G.on) return; G.paused = true; G.over = true; modal(`<h2>Wrecked!</h2><p class="muted">Your ${specOf(P.id).name} is towed back to your garage and repaired for free. Any job you had is lost.</p><div class="modal-actions"><button class="btn primary" data-a="tow">Tow me to the garage</button></div>`, { tow: () => { closeModal(); respawn(); } }); }, 1200); }
+    if (v === P) { SV.stats.wrecks++; save(); setTimeout(() => { if (!G.on) return; missionFailed(`Your ${specOf(P.id).name} was wrecked. It has been towed and repaired for free.`); }, 1200); }
     else if (v.kind === 'rival') { SV.stats.rivals++; save(); reward(50, 'Viper wrecked'); }
   }
 
@@ -910,14 +911,14 @@
     const shirt = '#2f6bff';
     const parts = st.bike ? bikeModel(sp.body, col, { shirt, helmet: col === '#ffffff' ? '#16203d' : '#ffffff' }) : carModel(sp.body, col, { shirt });
     P = makeVeh(SV.cur, 'player', st, parts);
-    P.x = GARAGE.x; P.z = GARAGE.z; P.h = Math.PI; P.y = 0;
+    P.x = SPAWN.cx; P.z = SPAWN.cz; P.h = Math.PI / 2; P.y = 0;
     parts.g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   }
   function respawn() {
     if (P) { P.dead = false; }
     setPlayerVehicle();
     clearHeat(true); G.job = null; endRace(true);
-    G.mode = 'foot'; F.x = GARAGE.x + 2.6; F.z = GARAGE.z; F.h = Math.PI; F.hp = 100; F.m.visible = true; P.m.driver.visible = false;
+    G.mode = 'foot'; F.x = SPAWN.x; F.z = SPAWN.z; F.h = 0; F.hp = RPX() && RPX().maxHp ? RPX().maxHp() : 100; F.m.visible = true; P.m.driver.visible = false;
     G.over = false; G.paused = false; G.camH = F.h; camPos.init = false; stopEngine();
     refreshOffers();
   }
@@ -1203,7 +1204,7 @@
     if (!window.LSPG_FLY && !(RPX() && RPX().noCol())) collideWorld(F, F.x, F.z, 0.4); // admins flying go through walls
     F.y = ground(F.x, F.z);
     if (RPX()) RPX().foot(F, dt, F.y);
-    F.hitT -= dt; F.hp = Math.min(100, F.hp + dt * 3);
+    F.hitT -= dt; { const mx = RPX() && RPX().maxHp ? RPX().maxHp() : 100; if (F.hp < mx) F.hp = Math.min(mx, F.hp + dt * (RPX() && RPX().inFight && RPX().inFight() ? 0.6 : 3)); else F.hp = Math.min(F.hp, mx); }
     for (const v of [...phys, ...G.traffic]) {
       if (Math.abs(v.x - F.x) > 7 || Math.abs(v.z - F.z) > 7) continue;
       for (const [cx, cz] of circles(v)) {
@@ -1215,9 +1216,16 @@
       }
     }
   }
-  function knockedOut() {
-    F.hp = 0; G.paused = true; G.over = true;
-    modal(`<h2>Knocked down!</h2><p class="muted">You got hit by a car. Stay on the pavement, or get in your ride!</p><div class="modal-actions"><button class="btn primary" data-a="ok">Back to the garage</button></div>`, { ok: () => { closeModal(); respawn(); } });
+  function knockedOut() { F.hp = 0; missionFailed('You got hit by a car. Stay on the pavement, or get in your ride!'); }
+  // you died: big MISSION FAILED, then respawn at the hospital or leave the game
+  function missionFailed(why) {
+    if (G.over) return; F.hp = 0; G.paused = true; G.over = true; stopEngine(); sfx('lose');
+    if (RPX() && RPX().died) RPX().died();
+    let el = $('#d-fail'); if (!el) { $('#s-drive').insertAdjacentHTML('beforeend', '<div id="d-fail"></div>'); el = $('#d-fail'); }
+    el.innerHTML = `<div class="fail-in"><h1>MISSION FAILED</h1><p>${why}</p><p class="muted">The ambulance takes you to LSP Hospital. The hospital bill is $100.</p><div class="fail-btns"><button class="btn primary" data-f="re">🔄 Respawn</button><button class="btn ghost" data-f="exit">🚪 Exit game</button></div></div>`;
+    el.hidden = false;
+    el.querySelector('[data-f="re"]').onclick = () => { el.hidden = true; respawn(); if (RPX() && RPX().respawned) RPX().respawned(); };
+    el.querySelector('[data-f="exit"]').onclick = () => { el.hidden = true; G.over = false; stopCity(); enterHub(); };
   }
 
   function logic(dt) {
@@ -1375,8 +1383,8 @@
     if (Math.abs(camera.fov - fov) > 0.1) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix(); }
   }
   function hud() {
-    const drive = G.mode === 'drive', hp = drive ? P.hp / P.s.hp : F.hp / 100;
-    $('#d-hp-t').textContent = drive ? `${specOf(P.id).name}  ${Math.ceil(P.hp)} / ${P.s.hp}` : `You  ${Math.ceil(F.hp)} / 100`;
+    const drive = G.mode === 'drive', mxh = RPX() && RPX().maxHp ? RPX().maxHp() : 100, hp = drive ? P.hp / P.s.hp : F.hp / mxh;
+    $('#d-hp-t').textContent = drive ? `${specOf(P.id).name}  ${Math.ceil(P.hp)} / ${P.s.hp}` : `You  ${Math.ceil(Math.max(0, F.hp))} / ${mxh}`;
     const bar = $('#d-hp'); bar.style.width = clamp(hp, 0, 1) * 100 + '%'; bar.style.background = hp < 0.3 ? '#ff4d5e' : hp < 0.6 ? '#ffb31a' : '#14c79a';
     const ht = $('#d-heat'); ht.textContent = '★'.repeat(G.heat) + '☆'.repeat(3 - G.heat); ht.classList.toggle('off', !G.heat);
     $('#d-earned').textContent = `⭐ +${G.earned.toLocaleString()}`;
@@ -1524,6 +1532,7 @@
     });
     Social.on('hello', (m) => { if (G.on && MP.room) { addLog('👋', `${m.who} joined your city`); LSPG.sfx && LSPG.sfx('pop'); } });
     Social.on('left', (m) => { const r = MP.remotes.get(m.who); if (r) { dropRemote(r); MP.remotes.delete(m.who); mpHud(); } if (G.on) addLog('👋', `${m.who} left`); });
+    Social.on('chatBlocked', (m) => { if (G.on) { toast('🚫 ' + m.why, 4500); LSPG.sfx && LSPG.sfx('hurt'); } });
     Social.on('chat', (m) => {
       if (!G.on || !MP.room) return; addLog(m.who, m.text); LSPG.sfx && LSPG.sfx('click');
       const r = m.who === Social.me() ? null : MP.remotes.get(m.who);
@@ -1565,7 +1574,7 @@
     if (MP.mySay) { const me = G.mode === 'drive' ? P : F; if (now > MP.mySay.userData.until) { scene.remove(MP.mySay); MP.mySay = null; } else MP.mySay.position.set(me.x, me.y + 3.4, me.z); }
   }
 
-  window.LSPDrive = { open: openLobby, _G: G, _P: () => P,
+  window.LSPDrive = { open: openLobby, _G: G, _P: () => P, fail: (why) => missionFailed(why), renderer: () => renderer, SPAWN,
     _wreckRivals() { let n = 0; for (const r of G.rivals) if (!r.dead) { wreck(r); n++; } for (const b of G.bots) b.ai.topMul = 0.2; return n; },
     playWith(room) { load(); MP.want = room; if (G.on) { mpEnd(); mpBegin(); return; } startCity(); },
     // test hook: run the simulation without rendering. keys = {thr, steer, ...}

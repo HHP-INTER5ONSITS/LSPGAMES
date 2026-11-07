@@ -19,6 +19,9 @@ const GAMES = { drive: 'LSP Drive', c4: 'Four in a Row' };
 
 // A light chat filter for a game with kids on it: no links, emails or phone numbers, and mask rude words.
 const RUDE = ['fuck', 'shit', 'bitch', 'bastard', 'asshole', 'dick', 'pussy', 'cunt', 'slut', 'whore', 'nigger', 'faggot', 'retard', 'madarchod', 'bhenchod', 'chutiya', 'gandu', 'randi'];
+// LSP rules: no online dating, nothing sexual. These messages are blocked completely.
+const NOT_ALLOWED = ['date me', 'dating', 'e-date', 'edate', 'online date', 'be my gf', 'be my bf', 'be my girlfriend', 'be my boyfriend', 'my girlfriend', 'my boyfriend', 'girlfriend', 'boyfriend', 'wanna date', 'go out with me', 'marry me', 'kiss me', 'kiss you', 'love you', 'i love u', 'ily', 'luv u', 'cuddle', 'hook up', 'hookup', 'sex', 'sexy', 'seggs', 'nude', 'nudes', 'naked', 'horny', 'boobs', 'porn', 'send pics', 'send pic', 'onlyfans', 'strip', 'bae', 'babe', 'hot girl', 'hot boy', 'snap me', 'add me on snap', 'rizz', 'smash', 'thirsty', 'baby girl', 'daddy'];
+function blockedChat(t) { const s = ' ' + String(t || '').toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').replace(/\s+/g, ' ') + ' '; return NOT_ALLOWED.some((w) => s.includes(' ' + w + ' ') || (w.length > 4 && s.includes(w))); }
 function cleanChat(t) {
   let s = String(t || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 120);
   if (!s) return '';
@@ -177,7 +180,11 @@ module.exports = function friends(app, { getDb, auth, allow, ipLog, nameProblem,
         else if (m.t === 'state' || m.t === 'chat') {
           const r = o.room && rooms.get(o.room); if (!r) return;
           let out;
-          if (m.t === 'chat') { const text = cleanChat(m.text); if (!text) return; out = { t: 'chat', who: o.username, text }; }
+          if (m.t === 'chat') {
+            if (o.mutedUntil && Date.now() < o.mutedUntil) return ws.send(JSON.stringify({ t: 'chatBlocked', why: `You are muted for breaking the rules. Try again in ${Math.ceil((o.mutedUntil - Date.now()) / 60000)} min.` }));
+            if (blockedChat(m.text)) { o.strikes = (o.strikes || 0) + 1; if (o.strikes >= 3) { o.mutedUntil = Date.now() + 10 * 60000; o.strikes = 0; } return ws.send(JSON.stringify({ t: 'chatBlocked', why: o.mutedUntil > Date.now() ? 'Muted for 10 minutes: no dating or sexual talk in LSP Games.' : `Not sent. No dating, flirting or sexual talk is allowed in LSP Games. (Warning ${o.strikes}/3)` })); }
+            const text = cleanChat(m.text); if (!text) return; out = { t: 'chat', who: o.username, text };
+          }
           else out = { t: 'state', who: o.username, d: m.d };
           const s = JSON.stringify(out);
           for (const x of r) if (x !== id || m.t === 'chat') { const oo = online.get(x); if (oo) for (const w of oo.socks) try { w.send(s); } catch (_) {} }

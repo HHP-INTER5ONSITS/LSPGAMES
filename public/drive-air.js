@@ -13,10 +13,11 @@
   const rnd = (a, b) => a + Math.random() * (b - a);
   const ISLANDS = [
     { id: 'palm', name: 'Palm Paradise', icon: '🏝️', x: -650, z: 1750, theme: 'palm', sand: '#f2dca4', grass: '#7cc46a', desc: 'White beaches, palm trees and coconut water.' },
-    { id: 'volcano', name: 'Volcano Isle', icon: '🌋', x: 250, z: 2200, theme: 'volcano', sand: '#4a3b35', grass: '#6b7d4a', desc: 'A smoking volcano and hot springs.' },
+    { id: 'volcano', name: 'Volcano Isle', icon: '🌋', x: 40, z: 2200, theme: 'volcano', sand: '#4a3b35', grass: '#6b7d4a', desc: 'A smoking volcano and hot springs.' },
     { id: 'snow', name: 'Snow Peak Island', icon: '🏔️', x: -1250, z: 2400, theme: 'snow', sand: '#dfe9f2', grass: '#ffffff', desc: 'Snow, pine trees and hot cocoa.' },
     { id: 'pirate', name: 'Pirate Cove', icon: '🏴‍☠️', x: -350, z: 2900, theme: 'pirate', sand: '#e8cf8f', grass: '#8cb85a', desc: 'An old pirate ship and buried treasure.' },
     { id: 'jungle', name: 'Jungle Ruins', icon: '🌴', x: -1000, z: 3400, theme: 'jungle', sand: '#d9c27a', grass: '#3f8a3a', desc: 'Thick jungle and an ancient temple.' },
+    { id: 'rocket', name: 'Rocket Base', icon: '🚀', x: -150, z: 3950, theme: 'rocket', sand: '#d8d2c4', grass: '#9aa37a', desc: 'LSP Space launch site. Launch a real rocket!' },
   ];
   const CITY_AP = { id: 'city', name: 'LSP City', icon: '🏙️', x: 0, z: 430 };
   const RUNWAY = { x0: -200, x1: 200, z: 430, w: 30 };
@@ -59,10 +60,10 @@
     flat(RUNWAY.x1 - RUNWAY.x0, RUNWAY.w, new T.MeshStandardMaterial({ map: rwTex, roughness: 0.9 }), 0, RUNWAY.z, 0.03);
     flat(420, 14, asphalt, 5, 405, 0.025);
     const rws = V2.sprite('🛬 RUNWAY 09 / 27', 10, 1.4, '#16203d', '#ffffff'); rws.position.set(-210, 4, 430);
-    const tower = new T.Group(); tower.position.set(-120, 0, 300); root.add(tower); { const t2 = K.adapter(tower); t2.box(5, 26, 5, '#e9eef5', 0, 13, 0, tower); t2.box(9, 4, 9, E.M('#2b3350', { metalness: 0.5, roughness: 0.2 }), 0, 28, 0, tower); t2.box(10, 0.6, 10, '#e9eef5', 0, 30.3, 0, tower); E.addCol(-122.5, 297.5, -117.5, 302.5); }
+    const tower = new T.Group(); tower.position.set(185, 0, 255); root.add(tower); { const t2 = K.adapter(tower); t2.box(5, 26, 5, '#e9eef5', 0, 13, 0, tower); t2.box(9, 4, 9, E.M('#2b3350', { metalness: 0.5, roughness: 0.2 }), 0, 28, 0, tower); t2.box(10, 0.6, 10, '#e9eef5', 0, 30.3, 0, tower); E.addCol(182.5, 252.5, 187.5, 257.5); }
     // ---- inside the terminal ----
     buildCheckin(V2, root); buildInfo(V2, root); buildCafe(V2, root); buildLounge(V2, root); buildSecurity(V2, root); buildBoard(root);
-    buildGates(root); buildHangar(V2, root);
+    buildGates(root); buildHangar(V2, root); buildMart(root, V2);
     // parked planes, and the one for your flight
     A.parked = [12, 27, 48, 66, 83].map((n, i) => { const p = makePlane(['#2f6bff', '#d61f30', '#14c79a', '#ff8a3d', '#6a3fa0'][i]); p.position.set(gateX(n), 0, 363); p.rotation.y = Math.PI; E.scene.add(p); return p; });
     A.plane = makePlane('#2f6bff'); A.plane.visible = false; E.scene.add(A.plane);
@@ -250,6 +251,82 @@
     V2.box(2.4, 1, 1, '#2b3350', 132, Y0 + 0.5, 297.5, root, false); E.addCol(130.8, 297, 133.2, 298);
     K.obj({ x: 132, z: 299.2, r: 1.8, label: () => (K.S.jet && K.S.jet.own ? '🛩️ Hangar desk: your jet is ready' : '🛩️ Hangar desk: rent $800 or buy a private jet'), use: jetDesk }, 0, 0);
     A.jet = makeJet(); E.scene.add(A.jet);
+  }
+
+  /* ---------- LSP MegaMart: a supermarket as big as the airport ---------- */
+  // [aisle name, icon, [[id, name, icon, price, fill, fun, energy]]]
+  const MART = [
+    ['Chips & snacks', '🥔', [['mm_fuego', 'Fuego Rolls spicy rolled chips', '🌶️', 4, 10, 10], ['mm_twists', 'Cheezy Twists cheese puffs', '🧀', 3, 10, 9], ['mm_salted', 'Classic salted potato chips', '🥔', 2, 8, 6], ['mm_masala', 'Magic masala chips', '🥔', 2, 8, 7], ['mm_nachos', 'Nacho chips + salsa', '🌮', 5, 14, 8], ['mm_popcorn', 'Butter popcorn', '🍿', 3, 8, 8], ['mm_pretzel', 'Salted pretzels', '🥨', 3, 9, 5], ['mm_bhujia', 'Aloo bhujia', '🥜', 3, 10, 6]]],
+    ['Chocolate & candy', '🍫', [['mm_pbcups', 'Peanut butter cups', '🥜', 3, 8, 12], ['mm_dairy', 'Dairy Delight milk chocolate', '🍫', 2, 6, 12], ['mm_crunch', 'Choco Crunch wafer bar', '🍫', 2, 6, 10], ['mm_caramel', 'Caramel nougat bar', '🍫', 2, 7, 10], ['mm_dark', 'Dark chocolate 70%', '🍫', 4, 5, 9], ['mm_gummy', 'Gummy bears', '🧸', 2, 4, 10], ['mm_lolly', 'Lollipop pack', '🍭', 2, 3, 9], ['mm_mints', 'Mint candy', '🍬', 1, 2, 5]]],
+    ['Mithai & namkeen', '🪔', [['mm_jamun', 'Gulab jamun tin (1 kg)', '🟤', 6, 20, 12], ['mm_rasgulla', 'Rasgulla tin (1 kg)', '⚪', 6, 20, 12], ['mm_soan', 'Soan papdi box', '🟨', 4, 12, 10], ['mm_katli', 'Kaju katli box', '💎', 9, 14, 12], ['mm_mixture', 'Spicy mixture namkeen', '🥜', 3, 10, 6], ['mm_chikki', 'Peanut chikki', '🥜', 2, 8, 6]]],
+    ['Drinks', '🥤', [['mm_cola', 'Cola (1.25 L)', '🥤', 2, 4, 6, 6], ['mm_lemon', 'Lemon soda', '🍋', 2, 3, 5, 6], ['mm_oj', 'Orange juice (1 L)', '🧃', 3, 8, 3, 8], ['mm_mango', 'Mango drink', '🥭', 2, 6, 5, 6], ['mm_energy', 'Volt energy drink', '⚡', 3, 2, 3, 18], ['mm_water', 'Mineral water (1 L)', '💧', 1, 2, 0, 4], ['mm_icetea', 'Peach iced tea', '🧋', 2, 3, 5, 6], ['mm_coconut', 'Coconut water', '🥥', 2, 4, 3, 8]]],
+    ['Dairy & eggs', '🥛', [['milk', 'Milk', '🥛', 3, 10, 0, 4], ['eggs', 'Eggs', '🥚', 5, 0], ['mm_cheese', 'Cheese slices', '🧀', 4, 10, 4], ['mm_yogurt', 'Strawberry yogurt', '🍓', 2, 10, 5], ['mm_butter', 'Butter', '🧈', 3, 4, 2], ['mm_paneer', 'Fresh paneer', '🧀', 4, 18, 3]]],
+    ['Bakery', '🥐', [['bread', 'Bread', '🍞', 4, 18], ['mm_croissant', 'Butter croissants (4)', '🥐', 5, 20, 6], ['mm_bagel', 'Bagels (4)', '🥯', 4, 22, 3], ['mm_cake', 'Chocolate cake', '🎂', 9, 25, 15], ['mm_cookies', 'Choc chip cookies', '🍪', 3, 10, 10], ['mm_muffin', 'Blueberry muffins (4)', '🧁', 5, 18, 8]]],
+    ['Fruit & vegetables', '🍎', [['apple', 'Apples', '🍎', 3, 12], ['mm_banana', 'Bananas (6)', '🍌', 2, 14, 2, 4], ['mm_mangoes', 'Alphonso mangoes', '🥭', 6, 16, 8], ['mm_grapes', 'Green grapes', '🍇', 4, 10, 4], ['veg', 'Vegetables', '🥦', 6, 0], ['mm_tomato', 'Tomatoes', '🍅', 2, 6], ['mm_watermelon', 'Watermelon', '🍉', 5, 18, 6, 4]]],
+    ['Frozen', '🧊', [['pizza', 'Frozen pizza', '🍕', 12, 45, 6], ['icecream', 'Ice cream tub', '🍦', 5, 10, 12], ['mm_fries', 'Frozen fries', '🍟', 4, 20, 6], ['mm_momos', 'Frozen momos', '🥟', 5, 24, 5], ['mm_icebar', 'Ice cream bars (4)', '🍫', 5, 8, 12], ['mm_nuggets', 'Veg nuggets', '🍗', 5, 22, 5]]],
+    ['Pantry', '🍚', [['pasta', 'Pasta', '🍝', 7, 0], ['mm_rice', 'Basmati rice (1 kg)', '🍚', 5, 30], ['mm_noodles', 'Instant noodles (4)', '🍜', 3, 22, 6], ['mm_cereal', 'Choco cereal', '🥣', 4, 18, 6, 4], ['mm_pb', 'Peanut butter', '🥜', 4, 14, 4], ['mm_honey', 'Honey', '🍯', 5, 8, 3, 6], ['mm_oats', 'Oats', '🥣', 3, 20, 0, 6]]],
+  ];
+  const MM = { x0: -226, x1: -66, z0: 288, z1: 330 };
+  function buildMart(root, V2) {
+    const T = E.T, Y0 = K.Y0;
+    for (const [, , list] of MART) for (const [id, name, icon, price, fill, fun, energy] of list) if (!K.FOODS[id]) K.FOODS[id] = { name, icon, price, fill: fill || 0, fun: fun || 0, energy: energy || 0 };
+    K.building({ ...MM, h: 9, wall: '#f1f4f8', floor: '#e9edf2', roof: '#9aa3b5', trim: '#14c79a', walls: [[MM.x0, MM.x1, MM.z0, 'h', [[-152, -146], [-100, -94]]], [MM.x0, MM.x1, MM.z1, 'h'], [MM.z0, MM.z1, MM.x0, 'v'], [MM.z0, MM.z1, MM.x1, 'v']], windows: [[-200, MM.z0, 1, 3], [-175, MM.z0, 1, 3], [-125, MM.z0, 1, 3], [-80, MM.z0, 1, 3]] }, V2, root);
+    const sg = V2.sprite('🛒 LSP MegaMart · open 24/7', 12, 1.8, '#14c79a', '#ffffff'); sg.position.set(-146, 11, 287.3);
+    // checkout lanes and self checkout by the doors
+    for (let k = 0; k < 8; k++) { const x = -216 + k * 11; V2.box(4, 1, 1, '#2b3350', x, Y0 + 0.5, 295, root, false); V2.box(1.2, 0.05, 1, '#16181f', x + 1.2, Y0 + 1.03, 295, root, false); E.addCol(x - 2, 294.5, x + 2, 295.5); const c = E.person('#14c79a', '#2d3a5c', ['#c68642', '#f1c27d', '#8d5524'][k % 3]); c.position.set(x - 1, Y0, 296.3); c.rotation.y = Math.PI; root.add(c); const n = E.textSprite(String(k + 1), '#14c79a', '#fff', 0.7, 0.5); n.position.set(x, Y0 + 2.4, 295); root.add(n); K.obj({ x, z: 293.6, r: 1.8, label: () => (K.getCart().length ? `💳 Checkout lane ${k + 1}: pay for ${K.getCart().length} items` : `🧾 Checkout lane ${k + 1}`), use: () => K.getCart().length ? K.checkout() : K.say('🧑 "Grab a cart and fill it up!"') }, 0, 0); }
+    for (let k = 0; k < 4; k++) { const x = -88 + k * 4; V2.box(1.2, 1.4, 0.8, '#16203d', x, Y0 + 0.7, 295, root, false); V2.box(0.9, 0.6, 0.05, E.M('#2f6bff', { emissive: '#2f6bff', emissiveIntensity: 0.7 }), x, Y0 + 1.6, 294.6, root, false); E.addCol(x - 0.6, 294.6, x + 0.6, 295.4); K.obj({ x, z: 293.8, r: 1.4, label: () => '📱 Self checkout: scan and pay', use: () => K.getCart().length ? K.checkout() : K.say('Your cart is empty.') }, 0, 0); }
+    // aisles: two shelves per category, filled with thousands of products (one instanced mesh)
+    const shelves = [], n = MART.length * 2, gap = (MM.x1 - 34 - (MM.x0 + 10)) / (n - 1);
+    for (let k = 0; k < n; k++) { const x = MM.x0 + 10 + k * gap; shelves.push(x); V2.box(1.3, 2.4, 22, '#d9dee8', x, Y0 + 1.2, 313, root, false); E.addCol(x - 0.7, 302, x + 0.7, 324); }
+    const boxG = new T.BoxGeometry(0.34, 0.4, 0.3), inst = new T.InstancedMesh(boxG, new T.MeshStandardMaterial({ roughness: 0.6 }), shelves.length * 2 * 4 * 50), mtx = new T.Matrix4(), col = new T.Color(); let ii = 0;
+    const PAL = ['#ff8a3d', '#ffd23f', '#d61f30', '#14c79a', '#2f6bff', '#8a5cff', '#ff4d8b', '#7a3e1d', '#ffffff', '#16203d'];
+    shelves.forEach((x, si) => { for (const side of [-1, 1]) for (let lv = 0; lv < 4; lv++) for (let k = 0; k < 50; k++) { mtx.makeTranslation(x + side * 0.5, Y0 + 0.35 + lv * 0.55, 302.6 + k * 0.42); inst.setMatrixAt(ii, mtx); col.set(PAL[(si * 3 + lv * 2 + Math.floor(k / 3)) % PAL.length]); inst.setColorAt(ii++, col); } });
+    inst.instanceMatrix.needsUpdate = true; inst.frustumCulled = false; root.add(inst);
+    MART.forEach(([name, icon], ai) => {
+      const x = (shelves[ai * 2] + shelves[ai * 2 + 1]) / 2;
+      const s2 = E.textSprite(`Aisle ${ai + 1} · ${icon} ${name}`, '#14c79a', '#ffffff', 5.5, 0.8); s2.position.set(x, Y0 + 5.6, 301); root.add(s2);
+      for (const z of [303, 313, 322]) K.obj({ x, z, r: 2.2, label: () => `${icon} Aisle ${ai + 1}: ${name} · browse`, use: () => aisle(ai) }, 0, 0);
+    });
+    // freezers along the back wall, produce bins and a bakery counter
+    for (let x = MM.x0 + 6; x < MM.x1 - 6; x += 3) V2.box(2.8, 2.2, 0.9, E.M('#cfe8ff', { emissive: '#9fd8ff', emissiveIntensity: 0.4, transparent: true, opacity: 0.8 }), x, Y0 + 1.1, MM.z1 - 0.7, root, false);
+    E.addCol(MM.x0, MM.z1 - 1.2, MM.x1, MM.z1);
+    for (let k = 0; k < 10; k++) { const x = -91 + (k % 5) * 3.6, z = 302 + Math.floor(k / 5) * 4; V2.box(2.4, 0.8, 2, '#8b6b4a', x, Y0 + 0.4, z, root, false); for (let q = 0; q < 6; q++) V2.box(0.35, 0.3, 0.35, ['#d61f30', '#ffd23f', '#14c79a', '#ff8a3d', '#8a5cff'][(k + q) % 5], x - 0.8 + (q % 3) * 0.8, Y0 + 0.95, z - 0.4 + Math.floor(q / 3) * 0.8, root, false); E.addCol(x - 1.2, z - 1, x + 1.2, z + 1); }
+    for (let k = 0; k < 6; k++) { const p = E.person(['#ff4d8b', '#14c79a', '#ffb31a', '#8a5cff', '#2f6bff', '#ff8a3d'][k], '#2d3a5c', ['#f1c27d', '#c68642', '#8d5524'][k % 3]); p.position.set(MM.x0 + 14 + k * 22, Y0, 300 + (k % 3) * 2); p.rotation.y = k; root.add(p); A.shoppers = A.shoppers || []; A.shoppers.push({ m: p, t: k }); }
+    K.places.push({ name: 'LSP MegaMart', icon: '🛒', x: -146, z: 284 });
+  }
+  function aisle(ai) {
+    const [name, icon, list] = MART[ai], cart = K.getCart();
+    K.openUi(`<div class="lf-top"><h3>${icon} Aisle ${ai + 1} · ${name}</h3><span class="pill">🛒 ${cart.length} items</span><button class="x" data-ui="close">✕</button></div><div class="lf-body"><div class="lf-grid">${list.map(([id, n, ic, p]) => `<div class="lf-card"><span class="ic">${ic}</span><b>${n}</b><p>${K.fmt$(p)}</p><button class="btn gold" data-mm="${id}">Add to cart</button></div>`).join('')}</div><p class="muted" style="margin-top:8px">Pay at any checkout lane or self checkout by the doors.</p></div>`);
+    document.querySelectorAll('#rp-win [data-mm]').forEach((b) => (b.onclick = () => { K.addToCart(b.dataset.mm, true); aisle(ai); }));
+  }
+
+  /* ---------- the Rocket Base island ---------- */
+  function rocketModel() {
+    const T = E.T, g = new T.Group(), V2 = K.adapter(g);
+    V2.cyl(2.2, 2.2, 34, '#f4f6fa', 0, 17, 0, g, 20); const nose = new T.Mesh(new T.ConeGeometry(2.2, 7, 20), E.M('#d61f30')); nose.position.y = 37.5; g.add(nose);
+    V2.cyl(2.25, 2.25, 1.2, '#16203d', 0, 22, 0, g, 20); V2.cyl(2.25, 2.25, 1.2, '#16203d', 0, 8, 0, g, 20);
+    for (let k = 0; k < 4; k++) { const f = V2.box(0.3, 5, 3, '#d61f30', Math.cos((k / 4) * Math.PI * 2) * 2.6, 2.5, Math.sin((k / 4) * Math.PI * 2) * 2.6, g); f.rotation.y = -(k / 4) * Math.PI * 2; }
+    const lsp = E.textSprite('LSP SPACE', null, '#16203d', 6, 1.4); lsp.position.set(0, 26, 2.4); g.add(lsp);
+    g.userData.flame = V2.box(2.6, 6, 2.6, E.M('#ffb31a', { emissive: '#ff5a00', emissiveIntensity: 2 }), 0, -3, 0, g, false); g.userData.flame.visible = false;
+    return g;
+  }
+  function launch(I) {
+    if (A.mode) return; if (!K.pay(1000, '🚀 Rocket launch')) return K.say('A launch costs $1,000.');
+    K.closeUi(); A.mode = 'rocket'; A.rk = { t: 0, I }; A.rocket.userData.flame.visible = true; E.getF().m.visible = false;
+    K.say('🎙️ Mission control: "T-minus 10… 9… 8…"', 3000); L.sfx && L.sfx('beep');
+  }
+  function tickRocket(dt) {
+    const r = A.rk; r.t += dt; const R = A.rocket, I = r.I, t = Math.max(0, r.t - 3);
+    if (r.t < 3 && Math.floor(r.t) !== Math.floor(r.t - dt)) L.sfx && L.sfx('beep', { volume: 0.4 });
+    if (r.t >= 3 && r.t - dt < 3) { L.sfx && L.sfx('explode'); K.say('🚀 LIFTOFF! We have liftoff!', 2500); }
+    R.position.y = 0.5 * 4 * t * t; R.rotation.z = -Math.min(0.5, t * 0.03);
+    if (r.t > 3) { E.G.shake = Math.max(E.G.shake || 0, Math.max(0, 0.8 - t * 0.06)); for (let k = 0; k < 4; k++) E.puff(R.position.x + rnd(-3, 3), Math.max(0.5, R.position.y - 4), R.position.z + rnd(-3, 3), k % 2 ? '#ffffff' : '#d9d9d9', 3, 2, rnd(-3, 3), rnd(-1, 2), rnd(-3, 3), 4, 0.5); }
+    E.getF().x = I.x; E.getF().z = I.z - 30;
+    if (r.t > 16) {
+      A.mode = null; R.position.y = 0; R.rotation.z = 0; R.userData.flame.visible = false; E.getF().m.visible = true;
+      const F = E.getF(); F.x = I.x + 8; F.z = I.z - 30; F.h = Math.PI;
+      K.S.rockets = (K.S.rockets || 0) + 1; K.receive(1500, '🛰️ Satellite contract'); K.notify(`🛰️ Launch #${K.S.rockets} successful! Your satellite reached orbit. The space agency paid you $1,500.`); K.save();
+    }
   }
 
   /* ---------- planes ---------- */
@@ -446,7 +523,7 @@
       else { const tr = V2.cyl(0.25, 0.35, 6 * s, '#8b6b4a', x, 3 * s, z, g, 8); tr.rotation.z = rnd(-0.15, 0.15); for (let k = 0; k < 6; k++) { const l = V2.box(3.2 * s, 0.1, 0.8 * s, '#3f9a3a', x + Math.cos((k / 6) * Math.PI * 2) * 1.4 * s, 6 * s, z + Math.sin((k / 6) * Math.PI * 2) * 1.4 * s, g, false); l.rotation.y = -(k / 6) * Math.PI * 2; l.rotation.z = -0.35; } }
       E.addCol(I.x + x - 0.4, I.z + z - 0.4, I.x + x + 0.4, I.z + z + 0.4);
     };
-    for (let k = 0; k < (I.theme === 'jungle' ? 60 : 28); k++) { const a = Math.random() * Math.PI * 2, r = rnd(20, 95), x = Math.cos(a) * r, z = Math.sin(a) * r; if (z > 40 && z < 90) continue; if (I.theme === 'volcano' && Math.hypot(x, z + 25) < 50) continue; tree(x, z, rnd(0.8, 1.3)); }
+    for (let k = 0; k < (I.theme === 'jungle' ? 60 : 28); k++) { const a = Math.random() * Math.PI * 2, r = rnd(20, 95), x = Math.cos(a) * r, z = Math.sin(a) * r; if (z > 40 && z < 90) continue; if (I.theme === 'volcano' && Math.hypot(x, z + 25) < 50) continue; if (I.theme === 'rocket' && (Math.hypot(x, z + 40) < 28 || Math.hypot(x + 40, z - 20) < 14)) continue; tree(x, z, rnd(0.8, 1.3)); }
     // the theme
     let chest = [0, -60];
     if (I.theme === 'palm') {
@@ -476,6 +553,14 @@
       K.obj({ x: I.x + 6, z: I.z - 95, r: 4, label: () => '🏴‍☠️ Explore the pirate ship', use: () => K.activity('play', 'Exploring the old pirate ship', 6, { fun: 12 }) }, 0, 0);
       for (let k = 0; k < 4; k++) { const x = rnd(-70, 70), z = rnd(-70, 30); V2.box(1.6, 0.04, 0.3, '#b3162a', x, 0.24, z, g, false).rotation.y = 0.785; V2.box(1.6, 0.04, 0.3, '#b3162a', x, 0.24, z, g, false).rotation.y = -0.785; }
       chest = [-48, -30];
+    } else if (I.theme === 'rocket') {
+      V2.box(30, 1.2, 30, '#8f8f8f', 0, 0.6, -40, g); E.addCol(I.x - 15, I.z - 55, I.x + 15, I.z - 25);
+      const gan = new T.Group(); gan.position.set(7, 1.2, -40); g.add(gan); const g2 = K.adapter(gan); for (let y = 0; y < 40; y += 4) g2.box(3, 0.3, 3, '#d61f30', 0, y, 0, gan, false); for (const [x, z] of [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]]) g2.box(0.3, 42, 0.3, '#d61f30', x, 21, z, gan, false);
+      A.rocket = rocketModel(); A.rocket.position.set(I.x, 1.2, I.z - 40); A.rocketBase = A.rocket.position.clone(); E.scene.add(A.rocket);
+      V2.box(16, 6, 10, '#e9eef5', -40, 3, 20, g); V2.box(16, 0.4, 10, '#16203d', -40, 6.2, 20, g); E.addCol(I.x - 48, I.z + 15, I.x - 32, I.z + 25);
+      const mc = V2.sprite('🛰️ MISSION CONTROL', 6, 1, '#16203d', '#fff'); mc.position.set(-40, 8, 25.5);
+      K.obj({ x: I.x - 40, z: I.z + 26.5, r: 3, label: () => '🚀 Mission control: launch the rocket · $1,000', use: () => launch(I) }, 0, 0);
+      chest = [45, 30];
     } else if (I.theme === 'jungle') {
       for (let k = 0; k < 6; k++) V2.box(30 - k * 4.5, 3, 30 - k * 4.5, '#8f8a73', 0, 1.5 + k * 3, -40, g);
       E.addCol(I.x - 15, I.z - 55, I.x + 15, I.z - 25);
@@ -583,9 +668,10 @@
     leave() { if (A.mode === 'jet') endJet(true); if (A.mode === 'fly') { A.mode = null; A.fl = null; A.plane.visible = false; } A.loc = null; setBound('city'); const F = E.getF(); if (F.m) F.m.visible = true; },
     blocked: () => !!A.mode || !!A.line,
     noCol: () => !!A.mode,
-    foot(F) { if (A.mode) { F.y = A.mode === 'fly' ? A.fl.y : A.J.y; return true; } return false; },
+    foot(F) { if (A.mode) { F.y = A.mode === 'fly' ? A.fl.y : A.mode === 'jet' ? A.J.y : K.Y0; return true; } return false; },
     cam(camera, dt) {
       if (!A.mode) return false;
+      if (A.mode === 'rocket') { const R = A.rocket.position, I = A.rk.I; camera.position.set(I.x + 45, 8 + Math.max(0, R.y - 30) * 0.35, I.z - 5); camera.lookAt(R.x, R.y + 20, R.z); return true; }
       const o = A.mode === 'fly' ? A.fl : A.J, fx = Math.sin(o.h), fz = Math.cos(o.h), D = AIR.d || (AIR.d = {});
       let want, look;
       if (A.mode === 'fly' && A.view) { // window seat: just behind the wing, looking out the left side
@@ -603,7 +689,7 @@
       if (!K) return;
       tickQueue(dt);
       if (A.lounge > 0) { A.lounge -= dt; const F = E.getF(); if (A.lounge <= 0 && F.x > 46 && F.x < 60 && F.z > 289 && F.z < 326) { F.x = 44.4; F.z = 307.5; K.say('⏰ Your 5 minutes in the lounge are over.', 3000); } }
-      if (A.mode === 'fly') tickFlight(dt); else if (A.mode === 'jet') tickJet(dt);
+      if (A.mode === 'fly') tickFlight(dt); else if (A.mode === 'jet') tickJet(dt); else if (A.mode === 'rocket') tickRocket(dt);
       // moving walkways in the concourse
       if (!A.mode && E.G.mode === 'foot') { const F = E.getF(); if (F.z > 330 && F.z < 346 && ((F.x > -195 && F.x < -8) || (F.x > 8 && F.x < 135))) { if (Math.abs(F.z - 336.5) < 1) F.x += 3 * dt; else if (Math.abs(F.z - 339.5) < 1) F.x -= 3 * dt; } }
       A.bt = (A.bt || 0) - dt; if (A.bt <= 0) { A.bt = 3; if (A.boardCv) drawBoard(); const t = T_(); if (t && !t.used && t.from === 'city' && !t.boardNote && K.absMin() >= t.boardAt) { t.boardNote = true; K.notify(`📢 Flight ${t.no} to ${placeOf(t.to).name} is now boarding at Gate ${t.gate}.`); } }

@@ -49,7 +49,7 @@
   const OBJ = [], BUILD = [], D3 = {};
   const save = () => DB && S && DB.save(S);
   const has = (id) => S && S.owned.includes(id);
-  const hour = () => Math.floor(S.time / 60), clockTxt = () => { const h = hour(), m = Math.floor(S.time % 60); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
+  const hour = () => Math.floor(S.time / 60), clockTxt = (t) => { const tt = t == null ? S.time : t, h = Math.floor(tt / 60), m = Math.floor(tt % 60); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
 
   /* A tiny version of the 3D helpers LSP Life uses, built on LSP Drive's own. */
   function adapter(root) {
@@ -152,14 +152,15 @@
     const at = (x, z, fl = 0) => { const gr = new T.Group(); gr.position.set(x, Y0 + fl * FH, z); fg.add(gr); return gr; };
     const up = Y0 + FH;
     // ---- ground floor: living room, kitchen, dining ----
-    const sofa = at(-10.5, -8.2); V2.box(3, 0.45, 1, '#4f6bd8', 0, 0.35, 0, sofa); V2.box(3, 0.6, 0.25, '#4f6bd8', 0, 0.8, 0.4, sofa); for (const x of [-1.4, 1.4]) V2.box(0.25, 0.65, 1, '#3f58c0', x, 0.5, 0, sofa);
+    F.m = { sofa: E.M('#4f6bd8').clone(), kitchen: E.M('#f2f3f5').clone(), rug: E.M('#b5533c').clone() };
+    const sofa = at(-10.5, -8.2); V2.box(3, 0.45, 1, F.m.sofa, 0, 0.35, 0, sofa); V2.box(3, 0.6, 0.25, F.m.sofa, 0, 0.8, 0.4, sofa); for (const x of [-1.4, 1.4]) V2.box(0.25, 0.65, 1, '#3f58c0', x, 0.5, 0, sofa);
     const tvs = at(-10.5, -12.6); V2.box(2.2, 0.5, 0.6, '#6b4a2f', 0, 0.25, 0, tvs); F.tv = V2.box(1.6, 0.9, 0.08, '#16181f', 0, 1.05, -0.1, tvs); F.screen = V2.box(1.5, 0.82, 0.01, E.M('#0b0d12'), 0, 1.05, -0.05, tvs, false);
     F.bigtv = V2.box(2.6, 1.4, 0.08, '#16181f', -10.5, Y0 + 1.4, -12.66, fg); F.console = V2.box(0.5, 0.12, 0.35, '#f2f3f5', -9.6, Y0 + 0.56, -12.5, fg);
-    F.rug = V2.box(4, 0.02, 2.6, '#b5533c', -10.5, Y0 + 0.02, -10.3, fg, false);
+    F.rug = V2.box(4, 0.02, 2.6, F.m.rug, -10.5, Y0 + 0.02, -10.3, fg, false);
     F.shelf = at(-13.55, -10.5); V2.box(0.4, 2.2, 1.6, '#6b4a2f', 0, 1.1, 0, F.shelf); for (let k = 0; k < 12; k++) V2.box(0.22, 0.32, 0.12, ['#d61f30', '#2f6bff', '#14c79a', '#ffb31a'][k % 4], 0.06, 0.3 + Math.floor(k / 4) * 0.6, -0.6 + (k % 4) * 0.35, F.shelf, false);
     F.plants = [[-13.3, -6.7, 0], [-5.5, -6.7, 0], [-13.3, -19.3, 1]].map(([x, z, f]) => { const p = at(x, z, f); V2.cyl(0.25, 0.2, 0.45, '#d0784a', 0, 0.22, 0, p); V2.box(0.6, 0.6, 0.6, '#3f8a3a', 0, 0.75, 0, p); return p; });
     F.aquarium = at(-7.5, -6.6); V2.box(1.4, 0.7, 0.5, '#6b4a2f', 0, 0.35, 0, F.aquarium); V2.box(1.3, 0.7, 0.45, E.M('#5fb6ef', { transparent: true, opacity: 0.55 }), 0, 1.05, 0, F.aquarium);
-    V2.box(5.1, 0.95, 0.8, '#f2f3f5', -3.05, Y0 + 0.47, -19.55, fg); V2.box(5.2, 0.06, 0.9, '#6f7685', -3.05, Y0 + 0.97, -19.55, fg); // kitchen counter
+    V2.box(5.1, 0.95, 0.8, F.m.kitchen, -3.05, Y0 + 0.47, -19.55, fg); V2.box(1, 1.8, 0.5, F.m.kitchen, -0.9, Y0 + 2.4, -19.8, fg, false); V2.box(1, 1.8, 0.5, F.m.kitchen, -5, Y0 + 2.4, -19.8, fg, false); V2.box(5.2, 0.06, 0.9, '#6f7685', -3.05, Y0 + 0.97, -19.55, fg); // kitchen counter
     V2.box(1, 2, 0.8, '#e7ebf2', -6.4, Y0 + 1, -19.5, fg); // fridge
     V2.box(0.8, 0.04, 0.6, '#2b3350', -2, Y0 + 1.0, -19.55, fg, false); V2.box(0.7, 0.05, 0.45, '#9aa3b5', -3.6, Y0 + 1.0, -19.55, fg, false);
     F.coffee = V2.box(0.35, 0.45, 0.3, '#2b3350', -1, Y0 + 1.22, -19.6, fg);
@@ -187,7 +188,9 @@
     o({ x: -3.6, z: -17.3, r: 1.4, floor: 0, tier: 8, label: () => '👨‍🍳 Private chef: cook me a meal (free)', use: () => { stopAct(); say('👨‍🍳 "Coming right up!"'); activity('eat', 'Eating the chef\'s special', 5, { hunger: 20, fun: 4, energy: 2 }); } });
     o({ x: -9.5, z: -16.7, r: 1.6, floor: 1, tier: 6, label: () => '🛁 Private bathtub: relax', use: () => activity('bath', 'Relaxing in your private bathtub', 7, { hygiene: 18, fun: 8, energy: 2 }, { x: -9.5, z: -18.3, face: 0, sit: true }) });
     o({ x: -7.5, z: -15.4, r: 1.3, floor: 0, tier: 7, label: () => '🎹 Play the piano', use: () => activity('piano', 'Playing the piano', 99, { fun: 10 }, { x: -7.5, z: -15.4, face: Math.PI }) });
-    o({ x: -12.2, z: -15.8, r: 1.8, floor: 1, label: () => '🛏️ Sleep', use: () => activity('sleep', 'Sleeping… zzz', 99, { energy: has('goodbed') ? 18 : 12 }, { x: -12.2, z: -17.4, face: Math.PI, lie: true }) });
+    o({ x: -12.2, z: -15.8, r: 1.8, floor: 1, label: () => '🛏️ Sleep', use: () => sleepUi({ x: -12.2, z: -17.4, face: Math.PI, lie: true }, has('goodbed') ? 18 : 12) });
+    V2.box(0.6, 0.6, 0.5, '#7a5c3a', -10.6, up + 0.3, -18.9, fg); V2.box(0.3, 0.3, 0.3, E.M('#ff4d5e', { emissive: '#ff2d2d', emissiveIntensity: 0.6 }), -10.6, up + 0.75, -18.9, fg, false);
+    o({ x: -10.6, z: -18, r: 1.1, floor: 1, label: () => '🗄️ Open the drawer', use: openDrawer });
     o({ x: 1, z: -18.2, r: 1.3, floor: 1, label: () => '🚿 Shower', use: () => activity('shower', 'Showering', 5, { hygiene: 22 }, { x: 1, z: -19, face: Math.PI }) });
     o({ x: -1.2, z: -18.6, r: 1.1, floor: 1, label: () => '🚽 Toilet', use: () => activity('toilet', 'Using the toilet', 3, { hygiene: 4 }, { x: -1.2, z: -19.3, face: 0, sit: true }) });
     o({ x: -4.4, z: -18.9, r: 1.1, floor: 1, label: () => '🧼 Wash hands', use: () => activity('wash', 'Washing hands', 2, { hygiene: 6 }) });
@@ -201,7 +204,7 @@
     o({ x: -2, z: -18.6, r: 1.2, floor: 0, label: () => '🍳 Cook', use: openStove });
     o({ x: -1, z: -18.7, r: 0.9, floor: 0, need: 'coffee', label: () => '☕ Make coffee', use: () => activity('coffee', 'Making coffee', 3, { energy: 9 }) });
     o({ x: 1, z: -13.6, r: 1.2, floor: 0, label: () => '🪜 Stairs up · just walk', use: () => {} });
-    applyFurniture(b);
+    applyFurniture(b); buildYard(b); applyHome(b);
   }
   function applyDesign(b, d) {
     b.mat.wall.color.set(d.wall); b.mat.trim.color.set(d.trim); b.mat.floor.color.set(d.floor); b.mat.slab.color.set(d.floor); b.door.material.color.set(d.door);
@@ -463,7 +466,7 @@
       const me = window.Social && Social.me();
       b.sign.material.map = E.textSprite(mine ? `${d.icon} ${me ? me + "'s" : 'Your'} ${d.name}` : '🏠 For sale · 10 designs', mine ? '#14c79a' : 'rgba(22,32,61,.8)', '#ffffff', 4.6, 0.8).material.map;
       if (mine && !b.F) furnish(b);
-      if (b.furnGroup) { b.furnGroup.visible = mine; if (mine) applyFurniture(b); }
+      if (b.furnGroup) { b.furnGroup.visible = mine; if (mine) { applyFurniture(b); applyHome(b); } }
       b.locked = !mine;
     });
   }
@@ -543,6 +546,7 @@
   // where the parcel goes: your front door, or the LSP Market pickup point if you have no house
   function dropPoint() {
     if (S.home != null) { const g = curHouse().group.position; return { x: g.x - 6.3, z: g.z - 4.4, name: 'your front door' }; }
+    if (S.apt && S.apt.door) return { x: S.apt.door.x, z: S.apt.door.z, name: 'your apartment building' };
     const [cx, cz] = E.lotC(...E.RP_LOTS.market); return { x: cx - 13 + 12, z: cz - 15 + 23.4, name: 'the LSP Market pickup point' };
   }
   const CR = { st: null };
@@ -667,7 +671,9 @@
   function openPhone(app) {
     stopAct(); if (shift) return;
     const ph = phoneP(), color = ph ? ph.phone : '#3a4566', name = ph ? ph.name : 'LSP Starter';
-    const APPS = [['upi', '📲', 'LSP UPI'], ['wallet', '👛', 'Wallet'], ['store', '🛍️', 'LSP Store'], ['orders', '📦', 'Orders'], ['biz', '🏢', 'Business'], ['stuff', '🎒', 'My stuff'], ['notes', '🔔', 'Alerts'], ['maps', '🗺️', 'Maps'], ...EXT.flatMap((m) => (m.apps || []).map((a) => [a.id, a.icon, a.label]))];
+    const ALL = [['upi', '📲', 'LSP UPI'], ['wallet', '👛', 'Wallet'], ['web', '🌐', 'LSP Web'], ['play', '🏪', 'Play Store'], ['maps', '🗺️', 'Maps'], ['notes', '🔔', 'Alerts'], ['settings', '⚙️', 'Settings'], ['store', '🛍️', 'LSP Store'], ['orders', '📦', 'Orders'], ['biz', '🏢', 'Business'], ['stuff', '🎒', 'My stuff'], ['eats', '🍔', 'LSP Eats'], ['jobs', '💼', 'LSP Jobs'], ['home', '🏡', 'Home Designer'], ...EXT.flatMap((m) => (m.apps || []).map((a) => [a.id, a.icon, a.label]))];
+    const APPS = ALL.filter(([id]) => installed(id));
+    if (app && !installed(app)) app = 'play';
     let body = '';
     if (!app) body = `<div class="ph-apps">${APPS.map(([id, ic, l]) => `<button data-papp="${id}"><span>${ic}</span>${l}</button>`).join('')}</div>`;
     else if (app === 'upi') body = `<div class="ph-bal"><small>LSP UPI balance</small><b>${fmt$(S.cash)}</b><small>${(window.Social && Social.me()) || 'you'}@lspupi</small></div><p class="muted" style="font-size:12px;margin:6px 0">Scan & pay at shops and stalls. Customers pay you by scanning your QR.</p>${(S.txns || []).slice(0, 25).map((t) => `<div class="rp-row"><div style="flex:1"><b style="font-size:13px">${t.label}</b><div class="muted" style="font-size:11px">Day ${t.day} · ${t.at}</div></div><b style="color:${t.amt >= 0 ? '#14c79a' : '#ff4d5e'}">${t.amt >= 0 ? '+' : '−'}${fmt$(Math.abs(t.amt))}</b></div>`).join('') || '<p class="muted">No payments yet.</p>'}`;
@@ -678,13 +684,25 @@
     else if (app === 'stuff') body = (S.stuff || []).length ? S.stuff.map((it, k) => { const p = PRODUCTS.find((q) => q.id === it.id); return `<div class="rp-row"><span style="font-size:24px">${it.icon}</span><div style="flex:1"><b>${it.name}</b> ×${it.n}</div>${p && p.use ? `<button class="btn primary" data-use="${k}" style="height:34px;font-size:13px">Use</button>` : ''}</div>`; }).join('') : '<p class="muted">Your bag is empty. Things you buy show up here.</p>';
     else if (app === 'notes') body = (S.notes || []).map((n) => `<div class="rp-row"><div><b style="font-size:13px">${n.m}</b><div class="muted" style="font-size:11px">Day ${n.day} · ${n.at}</div></div></div>`).join('') || '<p class="muted">No alerts.</p>';
     else if (app === 'maps') body = mapHtml();
+    else if (app === 'settings') body = settingsHtml();
+    else if (app === 'play') body = playHtml();
+    else if (app === 'web') body = webHtml();
+    else if (app === 'eats') body = eatsHtml();
+    else if (app === 'jobs') body = jobsHtml();
+    else if (app === 'home') body = designerHtml();
     else { const xa = EXT.flatMap((m) => m.apps || []).find((a) => a.id === app); if (xa) body = xa.html(); }
-    const title = app ? APPS.find((a) => a[0] === app) : null;
+    const title = app ? ALL.find((a) => a[0] === app) : null;
     openUi(`<div class="ph" style="--ph:${color}"><div class="ph-bar"><span>${clockTxt()}</span><span>${name}</span><span>📶 🔋</span></div><div class="ph-top">${app ? '<button data-papp="" class="ph-back">‹</button>' : ''}<b>${title ? title[1] + ' ' + title[2] : '📱 Home'}</b><button class="x" data-ui="close">✕</button></div><div class="ph-body">${body}</div></div>`);
     $('#rp-win').classList.add('phone');
     $$('#rp-win [data-papp]').forEach((x) => (x.onclick = () => openPhone(x.dataset.papp || null)));
     if (app === 'store') wireStore((c, q) => { if (c) D3.cat = c; D3.q = q; openPhone('store'); });
     if (app === 'wallet') wireBank(() => openPhone('wallet'));
+    if (app === 'settings') wireSettings(() => openPhone('settings'));
+    if (app === 'play') wirePlay();
+    if (app === 'web') wireWeb();
+    if (app === 'eats') wireEats();
+    if (app === 'jobs') wireJobs(() => openPhone('jobs'));
+    if (app === 'home') wireDesigner(() => openPhone('home'));
     if (app === 'maps') { drawMap(); $$('#rp-win [data-gps]').forEach((b) => (b.onclick = () => { if (b.dataset.gps === 'off') setGps(null); else setGps(places()[+b.dataset.gps]); openPhone('maps'); })); }
     { const xa = EXT.flatMap((m) => m.apps || []).find((a) => a.id === app); if (xa && xa.wire) xa.wire(); }
     $$('#rp-win [data-use]').forEach((x) => (x.onclick = () => { const it = S.stuff[+x.dataset.use], p = PRODUCTS.find((q) => q.id === it.id); closeUi(); activity('use', `Using your ${it.name.toLowerCase()}`, 5, Object.fromEntries(Object.entries(p.use).map(([k, v]) => [k, v / 5]))); }));
@@ -694,7 +712,7 @@
   const NEEDS = [['hunger', '🍔'], ['energy', '⚡'], ['hygiene', '🫧'], ['fun', '🎉']];
   function addNeeds(d, k = 1) { for (const n in d) if (S.needs[n] != null) S.needs[n] = clamp(S.needs[n] + d[n] * k, 0, 100); }
   const mood = () => (S.needs.hunger + S.needs.energy + S.needs.hygiene + S.needs.fun) / 4;
-  function say(m, ms) { toast(m, ms || 2600); }
+  function say(m, ms) { toast(m, (ms || 2600) * (SET.msg === 'normal' ? 1 : 1.8)); }
   function activity(id, text, secs, gain, spot) {
     stopAct(); act = { id, text, t: 0, secs, gain, spot: spot ? { ...spot, x: spot.x + curHouse().group.position.x, z: spot.z + curHouse().group.position.z } : null };
     if (act.spot) act.spot.floor = E.getF().floor || 0;
@@ -704,9 +722,9 @@
   const curHouse = () => BUILD.find((b) => b.house === S.home) || BUILD[0];
   function stopAct() { if (!act) return; act = null; $('#rp-act').hidden = true; const b = curHouse(); if (b && b.F) b.F.screen.material = E.M('#0b0d12'); }
   const cartTotal = () => cart.reduce((a, id) => a + FOODS[id].price, 0);
-  function addToCart(id) {
-    if (hour() < 8 || hour() >= 22) return say('The market is closed. It opens at 8 AM.');
-    if (cart.length >= 12) return say('Your basket is full. Pay at the till.');
+  function addToCart(id, open24) {
+    if (!open24 && (hour() < 8 || hour() >= 22)) return say('The market is closed. It opens at 8 AM.');
+    if (cart.length >= (open24 ? 40 : 12)) return say(open24 ? 'Your cart is full. Pay at a checkout lane.' : 'Your basket is full. Pay at the till.');
     cart.push(id); L.sfx && L.sfx('pop'); say(`${FOODS[id].icon} added. Basket ${fmt$(cartTotal())}`, 1600); hud();
   }
   function checkout() {
@@ -749,11 +767,11 @@
     if (tab === 'store') wireStore((c, q) => { if (c) D3.cat = c; D3.q = q; openLaptop('store'); });
     if (tab === 'bank') wireBank(() => openLaptop('bank'));
   }
-  const payMult = () => (has('pc') ? 1.25 : 1) * (mood() >= 60 ? 1.2 : mood() < 30 ? 0.8 : 1) * (1 + 0.1 * Math.floor((S.jobs[shift.id] || 0) / 5));
-  function startShift(id) {
+  const payMult = () => (shift && shift.mult ? shift.mult : 1) * (has('pc') ? 1.25 : 1) * (mood() >= 60 ? 1.2 : mood() < 30 ? 0.8 : 1) * (1 + 0.1 * Math.floor((S.jobs[shift.id] || 0) / 5));
+  function startShift(id, opt) {
     if (S.needs.hunger < 8) return say('Too hungry to work. Eat first!');
     if (S.needs.energy < 8) return say('Too tired to work. Sleep first!');
-    shift = { id, t: 60, pay: 0, done: 0, good: 0 }; nextTask();
+    shift = { id, t: 60, pay: 0, done: 0, good: 0, mult: (opt && opt.mult) || 1, title: opt && opt.title }; nextTask();
   }
   function nextTask() {
     const pick = (a) => a[Math.floor(Math.random() * a.length)], s = shift, j = JOBS.find((x) => x.id === s.id);
@@ -774,7 +792,7 @@
   }
   function endShift() {
     const s = shift; if (!s) return; shift = null;
-    receive(s.pay, `💼 ${JOBS.find((j) => j.id === s.id).name} shift`); S.earned += s.pay; S.shifts++; S.jobs[s.id] = (S.jobs[s.id] || 0) + s.good; addNeeds({ energy: -12, hunger: -8, fun: -4 });
+    receive(s.pay, `💼 ${s.title || JOBS.find((j) => j.id === s.id).name + ' shift'}`); S.earned += s.pay; S.shifts++; S.jobs[s.id] = (S.jobs[s.id] || 0) + s.good; addNeeds({ energy: -12, hunger: -8, fun: -4 });
     const pts = s.pay > 0 ? Wallet.add(Math.max(1, Math.round(s.pay / 4))) : 0; save(); hud(); L.sfx && L.sfx(s.pay ? 'cash' : 'lose');
     openUi(`<div class="lf-top"><h3>Shift over</h3><button class="x" data-ui="close">✕</button></div><div class="lf-body" style="text-align:center"><p style="font-family:Fredoka,system-ui,sans-serif;font-size:40px;font-weight:700;color:#14c79a;margin:6px 0">${fmt$(s.pay)}</p><p>${s.good} of ${s.done} done well · ⭐ +${pts}</p><button class="btn primary" data-again="1">Another shift</button></div>`, true);
     $$('#rp-win [data-again]').forEach((b) => (b.onclick = () => openLaptop('jobs')));
@@ -798,10 +816,186 @@
       }
       F.x = px + ox; F.z = pz + oz;
   }
+  /* ---------- settings (kept on this device) ---------- */
+  const SET_KEY = 'lspdrive.settings', SPEEDS = { real: 1 / 60, slow: 1, normal: 2, fast: 4 };
+  const SET = (() => { try { return { speed: 'normal', gfx: 'high', msg: 'normal', ...(JSON.parse(localStorage.getItem(SET_KEY)) || {}) }; } catch (e) { return { speed: 'normal', gfx: 'high', msg: 'normal' }; } })();
+  const mps = () => SPEEDS[SET.speed] || 2;
+  function saveSet() { try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (e) {} applySet(); }
+  function applySet() {
+    const r = E && E.renderer; if (r) { const touch = L.isTouch(); r.setPixelRatio(SET.gfx === 'low' ? 0.75 : Math.min(devicePixelRatio || 1, touch ? 1.25 : 1.5)); }
+    if (E && E.sun) E.sun.castShadow = SET.gfx !== 'low' && !L.isTouch();
+    document.body.classList.toggle('rp-bigmsg', SET.msg === 'large');
+  }
+  function settingsHtml() {
+    const row = (k, label, opts) => `<p style="margin:12px 0 6px"><b>${label}</b></p><div class="rp-cats">${opts.map(([v, n]) => `<button data-set="${k}:${v}" class="${SET[k] === v ? 'on' : ''}">${n}</button>`).join('')}</div>`;
+    return `${row('speed', '⏱️ Clock speed', [['real', 'Real time (1 min = 60 s)'], ['slow', 'Slow (1 min = 1 s)'], ['normal', 'Normal (2 min = 1 s)'], ['fast', 'Fast (4 min = 1 s)']])}
+      ${row('gfx', '🖥️ Graphics', [['high', 'High (shadows)'], ['low', 'Low (faster)']])}
+      ${row('msg', '💬 Messages', [['normal', 'Normal'], ['long', 'Stay longer'], ['large', 'Large and longer']])}
+      <p style="margin:14px 0 6px"><b>📜 Rules of LSP Town</b></p>${RULES_HTML}`;
+  }
+  function wireSettings(re) { $$('#rp-win [data-set]').forEach((b) => (b.onclick = () => { const [k, v] = b.dataset.set.split(':'); SET[k] = v; saveSet(); L.sfx && L.sfx('click'); re(); })); }
+  const RULES_HTML = `<div class="rp-rules"><div>🚫 <b>No online dating or flirting.</b> No boyfriend/girlfriend roleplay, no "date me".</div><div>🔞 <b>Nothing sexual.</b> No sexual words, jokes or roleplay.</div><div>🤬 <b>No swearing or bullying.</b> Bad words are hidden.</div><div>🛡️ Never share your address, phone number or passwords.</div><div>⚠️ Breaking the rules: the message is blocked, 3 warnings = muted, admins can ban.</div></div>`;
+  function showRules(first) {
+    openUi(`<div class="lf-top"><h3>📜 LSP Town rules</h3>${first ? '' : '<button class="x" data-ui="close">✕</button>'}</div><div class="lf-body" style="max-width:460px">${RULES_HTML}<button class="btn primary" data-agree="1" style="margin-top:12px;width:100%">I agree</button></div>`);
+    $('#rp-win [data-agree]').onclick = () => { try { localStorage.setItem('lspdrive.rules', '1'); } catch (e) {} closeUi(); };
+  }
+
+  /* ---------- sleeping, the alarm clock and the drawer ---------- */
+  function sleepUi(spot, gainE) {
+    stopAct();
+    openUi(`<div class="lf-top"><h3>🛏️ Go to sleep</h3><button class="x" data-ui="close">✕</button></div><div class="lf-body" style="max-width:420px;text-align:center"><p>It is ${clockTxt()}. How long do you want to sleep? Your alarm will wake you up.</p><div class="lf-grid">${[6, 8, 10, 12].map((h) => `<button class="btn ${h === 8 ? 'primary' : 'ghost'}" data-sleep="${h}">${h} hours<br><small>wake at ${clockTxt((S.time + h * 60) % DAY_MIN)}</small></button>`).join('')}</div></div>`);
+    $$('#rp-win [data-sleep]').forEach((b) => (b.onclick = () => { closeUi(); D3.wakeAt = absMin() + +b.dataset.sleep * 60; activity('sleep', `Sleeping until ${clockTxt((S.time + +b.dataset.sleep * 60) % DAY_MIN)}… zzz`, 99, { energy: gainE }, spot); }));
+  }
+  function goodMorning() {
+    stopAct(); D3.wakeAt = null; L.sfx && L.sfx('beep');
+    let el = $('#rp-gm'); if (!el) { $('#s-drive').insertAdjacentHTML('beforeend', '<div id="rp-gm"></div>'); el = $('#rp-gm'); }
+    const me = (window.Social && Social.me()) || '';
+    el.innerHTML = `<div class="gm-sky"><div class="gm-sun"></div></div><div class="gm-card"><div class="gm-clock"><div class="gm-bell l"></div><div class="gm-bell r"></div><div class="gm-face"><i class="gm-h"></i><i class="gm-m"></i></div><div class="gm-feet"></div></div><h2>Good morning${me ? ', ' + me : ''}! ☀️</h2><p>${clockTxt()} · Day ${S.day}. You feel rested.</p><div class="gm-btns"><button class="btn primary" data-gm="up">Get up</button><button class="btn ghost" data-gm="drawer">🗄️ Open the drawer</button></div></div>`;
+    el.hidden = false; let n = 0; const ring = setInterval(() => { if (++n > 6 || el.hidden) return clearInterval(ring); L.sfx && L.sfx('beep', { volume: 0.4 }); }, 450);
+    el.querySelector('[data-gm="up"]').onclick = () => { el.hidden = true; };
+    el.querySelector('[data-gm="drawer"]').onclick = () => { el.hidden = true; openDrawer(); };
+  }
+  function openDrawer() {
+    S.drawer = S.drawer || {}; const found = S.drawer.day !== S.day && Math.random() < 0.5 ? 5 + Math.floor(Math.random() * 46) : 0; S.drawer.day = S.day;
+    if (found) receive(found, '🗄️ Cash you found in your drawer');
+    const items = [['⌚', 'Watch'], ['👛', 'Wallet'], ['🔌', 'Phone charger'], ['📓', 'Notebook'], ['🕶️', 'Sunglasses'], ['🔑', 'House keys'], ['🎧', 'Earphones'], ['🧦', 'Socks']];
+    openUi(`<div class="lf-top"><h3>🗄️ Your drawer</h3><button class="x" data-ui="close">✕</button></div><div class="lf-body" style="max-width:440px"><div class="lf-grid">${items.map(([i, n]) => `<div class="lf-card"><span class="ic">${i}</span><b>${n}</b></div>`).join('')}</div>${found ? `<p>💵 You found <b>${fmt$(found)}</b> in your drawer!</p>` : ''}<button class="btn primary" data-charge="1">🔌 Charge your phone and take your keys</button></div>`);
+    $('#rp-win [data-charge]').onclick = () => { closeUi(); say('📱 Phone charged. 🔑 Keys in your pocket. Have a great day!', 3000); addNeeds({ fun: 3 }); };
+  }
+
+  /* ---------- your home: designer, backyard and guests ---------- */
+  const HD = {
+    floor: [['Oak wood', '#c99a66'], ['Dark wood', '#6b4a2f'], ['White marble', '#f2f1ec'], ['Grey tile', '#b9bec7'], ['Blue carpet', '#5b7bd5'], ['Black marble', '#2b2b2f']],
+    sofa: [['Royal blue', '#4f6bd8'], ['Grey', '#7a808a'], ['Leather brown', '#7a4a2a'], ['Cream', '#efe4cf'], ['Emerald', '#1f8a5b'], ['Pink', '#ff8fb3']],
+    bed: [['Purple', '#8a5cff'], ['White', '#f4f4f4'], ['Navy', '#22325c'], ['Sunset', '#ff8a3d'], ['Mint', '#7fe0c0'], ['Red', '#c0392b']],
+    kitchen: [['White', '#f2f3f5'], ['Black', '#2b2b2f'], ['Wood', '#a87a50'], ['Sage', '#9fb89a'], ['Navy', '#2f3f6b'], ['Red', '#c94b3c']],
+    rug: [['Terracotta', '#b5533c'], ['Blue', '#2f6bff'], ['Beige', '#d9c8a9'], ['Black', '#16181f'], ['Green', '#3f8a3a'], ['Pink', '#ff4d8b']],
+  };
+  const YARD = [['grill', '🍖', 'BBQ grill', 300], ['patio', '🪑', 'Patio table set', 400], ['garden', '🌻', 'Flower and veg garden', 250], ['swing', '🎠', 'Garden swing', 350], ['tramp', '🤸', 'Trampoline', 500], ['hottub', '♨️', 'Hot tub', 2500], ['fire', '🔥', 'Fire pit', 450], ['tree', '🌳', 'Big shade tree', 200]];
+  const homeD = () => (S.homeD = S.homeD || { floor: 0, sofa: 0, bed: 0, kitchen: 0, rug: 0, yard: [] });
+  function applyHome(b) {
+    if (!b || !b.F || !b.F.m) return; const d = homeD(), m = b.F.m;
+    if (d.floor) { b.mat.floor.color.set(HD.floor[d.floor][1]); b.mat.slab.color.set(HD.floor[d.floor][1]); }
+    m.sofa.color.set(HD.sofa[d.sofa][1]); m.kitchen.color.set(HD.kitchen[d.kitchen][1]); m.rug.color.set(HD.rug[d.rug][1]);
+    if (!has('goodbed')) b.F.blanket.material.color.set(HD.bed[d.bed][1]);
+    for (const [id] of YARD) if (b.Y && b.Y[id]) b.Y[id].visible = d.yard.includes(id);
+  }
+  function designerHtml() {
+    if (S.home == null) return '<p>You need a house first. Buy one next to the garage, then design it here.</p>';
+    const d = homeD(), part = (k, label) => `<p style="margin:12px 0 6px"><b>${label}</b> <span class="muted">· $50 to change</span></p><div class="rp-cats">${HD[k].map(([n, c], i) => `<button data-hd2="${k}:${i}" class="${d[k] === i ? 'on' : ''}"><i style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${c};vertical-align:-1px;margin-right:4px"></i>${n}</button>`).join('')}</div>`;
+    return `<p class="muted" style="margin:0">Design every room of your house. Changes show up right away.</p>${part('floor', '🪵 Floors (all rooms)')}${part('sofa', '🛋️ Living room sofa')}${part('rug', '🟫 Living room rug')}${part('kitchen', '🍳 Kitchen cabinets')}${part('bed', '🛏️ Bedroom bedding')}
+      <p style="margin:14px 0 6px"><b>🌳 Backyard</b></p><div class="lf-grid">${YARD.map(([id, i, n, p]) => `<div class="lf-card"><span class="ic">${i}</span><b>${n}</b><button class="btn ${d.yard.includes(id) ? 'ghost' : 'gold'}" data-yard="${id}" ${d.yard.includes(id) || canPay(p) ? '' : 'disabled'}>${d.yard.includes(id) ? 'Remove' : fmt$(p)}</button></div>`).join('')}</div>
+      <p style="margin:14px 0 6px"><b>📨 Guests</b></p><button class="btn primary" data-guests="1" ${D3.guests ? 'disabled' : ''}>${D3.guests ? 'Guests are over right now' : 'Invite friends over (house party)'}</button><p class="muted" style="font-size:12px">Real friends can join your city from the 👥 Friends page and walk in.</p>`;
+  }
+  function wireDesigner(re) {
+    $$('#rp-win [data-hd2]').forEach((x) => (x.onclick = () => { const [k, i] = x.dataset.hd2.split(':'); if (homeD()[k] === +i) return; if (!pay(50, '🎨 Home redesign')) return say('You need $50.'); homeD()[k] = +i; save(); applyHome(curHouse()); L.sfx && L.sfx('ding'); re(); }));
+    $$('#rp-win [data-yard]').forEach((x) => (x.onclick = () => { const id = x.dataset.yard, d = homeD(), y = YARD.find((q) => q[0] === id); if (d.yard.includes(id)) d.yard = d.yard.filter((q) => q !== id); else { if (!pay(y[3], `${y[1]} ${y[2]}`)) return; d.yard.push(id); } save(); applyHome(curHouse()); re(); }));
+    const g = $('#rp-win [data-guests]'); if (g) g.onclick = () => { closeUi(); inviteGuests(); };
+  }
+  function buildYard(b) {
+    const T = E.T, V2 = b.V2, g = b.group, Y = (b.Y = {}), grp = (k) => { const q = new T.Group(); g.add(q); q.visible = false; Y[k] = q; return q; };
+    const grill = grp('grill'); V2.box(1.2, 0.9, 0.7, '#2b2b2b', 5.5, 0.6, -9, grill); V2.box(1.3, 0.1, 0.8, '#555', 5.5, 1.1, -9, grill, false);
+    const patio = grp('patio'); V2.cyl(0.8, 0.8, 0.06, '#ffffff', 5.5, 0.85, -13, patio, 18); V2.cyl(0.06, 0.06, 0.8, '#555', 5.5, 0.45, -13, patio, 6); for (const [x, z] of [[4.4, -13], [6.6, -13], [5.5, -14.1]]) V2.box(0.5, 0.45, 0.5, '#14c79a', x, 0.4, z, patio, false); V2.cyl(0.04, 0.04, 2.6, '#ffffff', 5.5, 1.5, -13, patio, 6); V2.cyl(1.4, 0.05, 0.5, '#ff4d8b', 5.5, 2.7, -13, patio, 16);
+    const garden = grp('garden'); for (let k = 0; k < 10; k++) V2.box(0.5, 0.5, 0.5, ['#ffd23f', '#ff4d8b', '#3f8a3a', '#ff8a3d'][k % 4], 4 + (k % 5) * 0.8, 0.45, -17.5 - Math.floor(k / 5) * 0.9, garden, false); V2.box(4.4, 0.3, 2.2, '#6b4a2f', 5.6, 0.2, -18, garden, false);
+    const swing = grp('swing'); for (const x of [-18.5, -15.5]) V2.box(0.15, 2.6, 0.15, '#7a5c3a', x, 1.4, -9, swing); V2.box(3.3, 0.15, 0.15, '#7a5c3a', -17, 2.7, -9, swing); V2.box(1.2, 0.08, 0.5, '#ff4d8b', -17, 0.8, -9, swing, false);
+    const tramp = grp('tramp'); V2.cyl(1.7, 1.7, 0.1, '#16203d', -17, 0.9, -15, tramp, 24); V2.cyl(1.8, 1.8, 0.12, '#2f6bff', -17, 0.85, -15, tramp, 24);
+    const hot = grp('hottub'); V2.box(2.6, 0.9, 2.6, '#7a5c3a', -17, 0.6, -20, hot); V2.box(2.3, 0.05, 2.3, E.M('#7fd8ff', { emissive: '#2fa8ff', emissiveIntensity: 0.4 }), -17, 1.06, -20, hot, false);
+    const fire = grp('fire'); V2.cyl(0.9, 1, 0.4, '#555', 5.5, 0.35, -23.5, fire, 16); V2.box(0.5, 0.5, 0.5, E.M('#ff8a3d', { emissive: '#ff5a00', emissiveIntensity: 1.5 }), 5.5, 0.7, -23.5, fire, false);
+    const tree = grp('tree'); V2.cyl(0.4, 0.5, 3.5, '#6b4a2f', -17, 1.9, -3, tree, 8); const c = new T.Mesh(new T.IcosahedronGeometry(2.6, 0), E.M('#3f8a3a', { flatShading: true })); c.position.set(-17, 5, -3); tree.add(c);
+    const o = (q, id) => obj({ ...q, where: 'home', when: () => homeD().yard.includes(id) && !(E.getF().floor) }, g.position.x, g.position.z);
+    o({ x: 5.5, z: -10, r: 1.6, label: () => '🍖 Grill a BBQ', use: () => activity('cook', 'Grilling a BBQ', 6, { hunger: 7, fun: 2 }) }, 'grill');
+    o({ x: 5.5, z: -11.8, r: 1.6, label: () => '🪑 Relax on the patio', use: () => activity('relax', 'Relaxing on the patio', 8, { fun: 4, energy: 3 }) }, 'patio');
+    o({ x: 5.5, z: -16.4, r: 1.6, label: () => '🌻 Water the garden', use: () => activity('garden', 'Gardening', 6, { fun: 4, hygiene: -1 }) }, 'garden');
+    o({ x: -17, z: -8, r: 1.6, label: () => '🎠 Swing', use: () => activity('play', 'Swinging', 6, { fun: 8 }) }, 'swing');
+    o({ x: -17, z: -13, r: 2, label: () => '🤸 Jump on the trampoline', use: () => activity('play', 'Jumping on the trampoline', 6, { fun: 12, energy: -2 }) }, 'tramp');
+    o({ x: -15.2, z: -20, r: 1.8, label: () => '♨️ Hot tub', use: () => activity('spa', 'Relaxing in the hot tub', 8, { hygiene: 8, fun: 8, energy: 4 }) }, 'hottub');
+    o({ x: 5.5, z: -22, r: 1.8, label: () => '🔥 Sit by the fire pit', use: () => activity('relax', 'Sitting by the fire', 6, { fun: 6, energy: 2 }) }, 'fire');
+  }
+  function inviteGuests() {
+    const b = curHouse(); if (!b || D3.guests) return;
+    const g = b.group, names = ['Aarav', 'Mia', 'Kabir', 'Zoe', 'Ishaan', 'Leo', 'Anaya', 'Sam'], n = 3 + Math.floor(Math.random() * 3);
+    D3.guests = { t: 0, list: [] }; notify(`📨 You invited ${n} friends over. They're on their way!`);
+    for (let k = 0; k < n; k++) {
+      const p = E.person(['#ff4d8b', '#14c79a', '#ffb31a', '#8a5cff', '#2f6bff'][k % 5], '#2d3a5c', ['#f1c27d', '#c68642', '#8d5524'][k % 3]);
+      p.position.set(g.position.x - 6.3 + (k - n / 2) * 0.8, Y0, g.position.z + 8); E.scene.add(p);
+      const nm = E.textSprite(names[(k + S.day) % names.length], 'rgba(22,32,61,.75)', '#fff', 1.4, 0.4); nm.position.y = 2.3; p.add(nm);
+      D3.guests.list.push({ m: p, stage: 0, delay: k * 1.2, spot: [g.position.x - 12 + (k % 3) * 1.6, g.position.z - 10 - Math.floor(k / 3) * 1.6] });
+    }
+  }
+  function tickGuests(dt) {
+    const G = D3.guests; if (!G) return; G.t += dt; const b = curHouse();
+    for (const q of G.list) {
+      if (G.t < q.delay) continue; const m = q.m, door = [b.group.position.x - 6.3, b.group.position.z - 4.5], inside = [b.group.position.x - 6.3, b.group.position.z - 8];
+      const tg = q.stage === 0 ? door : q.stage === 1 ? inside : q.stage === 2 ? q.spot : q.stage === 3 ? inside : q.stage === 4 ? door : [door[0], door[1] + 14];
+      const dx = tg[0] - m.position.x, dz = tg[1] - m.position.z, d = Math.hypot(dx, dz), u = m.userData;
+      if (q.stage === 2 && d < 0.2) { m.rotation.y = Math.sin(G.t * 0.7 + q.delay) * 1.2; m.position.y = Y0 + Math.abs(Math.sin(G.t * 6 + q.delay)) * 0.15; u.arms[0].rotation.x = u.arms[1].rotation.x = -Math.abs(Math.sin(G.t * 6 + q.delay)) * 2; if (G.t > 150) q.stage = 3; continue; }
+      if (d < 0.25) { q.stage++; if (q.stage > 5) { E.scene.remove(m); q.gone = true; } continue; }
+      m.position.x += (dx / d) * Math.min(d, dt * 2); m.position.z += (dz / d) * Math.min(d, dt * 2); m.rotation.y = Math.atan2(dx, dz); m.position.y = Y0; const w = Math.sin(G.t * 9) * 0.6; u.legs[0].rotation.x = w; u.legs[1].rotation.x = -w;
+    }
+    const F = E.getF(); if (G.t > 5 && G.t < 150 && b && insideB(b, F.x, F.z)) { addNeeds({ fun: 0.6 }, dt); if (Math.random() < dt * 0.15) say(['🎉 "Nice house!"', '🍕 "Who ordered pizza?"', '🎶 "Turn the music up!"', '😂 "Haha, good one!"', '🕺 "Let\'s dance!"'][Math.floor(Math.random() * 5)], 1800); }
+    if (G.list.every((q) => q.gone)) { D3.guests = null; say('👋 Your friends went home. Great party!', 2500); }
+  }
+
+  /* ---------- phone: Play Store, LSP Web, LSP Eats, LSP Jobs ---------- */
+  const CORE_APPS = ['upi', 'wallet', 'notes', 'maps', 'settings', 'play', 'web'];
+  const PLAY = [['store', '🛍️', 'LSP Store', 'Shop 100 products, delivered with OTP.'], ['orders', '📦', 'Orders', 'Track your deliveries and OTPs.'], ['biz', '🏢', 'Business', 'Your TAXIN and businesses.'], ['eats', '🍔', 'LSP Eats', 'Fast food delivered to your door.'], ['jobs', '💼', 'LSP Jobs', 'Apply for real jobs in town.'], ['home', '🏡', 'Home Designer', 'Design your house and backyard.'], ['stuff', '🎒', 'My stuff', 'Things you own.'], ['flights', '✈️', 'Flights', 'Book flights to the islands.'], ['mafia', '🕴️', 'Mafia', 'Missions, rank and weapons.'], ['events', '🎉', 'Party Planner', 'Book the city party hall.']];
+  const installed = (id) => CORE_APPS.includes(id) || (S.apps || []).includes(id);
+  function playHtml() { return `<p class="muted" style="margin:0 0 8px">Download apps to your phone.</p>${PLAY.map(([id, ic, n, d]) => `<div class="rp-row"><span style="font-size:28px">${ic}</span><div style="flex:1"><b>${n}</b><div class="muted" style="font-size:12px">${d}</div></div>${installed(id) ? `<button class="btn ghost" data-open="${id}" style="height:34px">Open</button>` : `<button class="btn primary" data-get="${id}" style="height:34px">Get</button>`}</div>`).join('')}`; }
+  function wirePlay() {
+    $$('#rp-win [data-open]').forEach((b) => (b.onclick = () => openPhone(b.dataset.open)));
+    $$('#rp-win [data-get]').forEach((b) => (b.onclick = () => { const id = b.dataset.get; b.disabled = true; let p = 0; const t = setInterval(() => { p += 20; b.textContent = p + '%'; if (p >= 100) { clearInterval(t); S.apps = [...new Set([...(S.apps || []), id])]; save(); L.sfx && L.sfx('ding'); notify(`📲 ${PLAY.find((q) => q[0] === id)[2]} installed.`); if ($('#rp-win .ph')) openPhone('play'); } }, 220); }));
+  }
+  const EATS = [['eat-burger', '🍔', 'Burger Bros · Double cheeseburger meal', 9, 'burgerm', 'Burger meal', 70], ['eat-pizza', '🍕', 'Slice Express · Large pepperoni pizza', 14, 'pizzam', 'Hot pizza', 85], ['eat-biryani', '🍛', 'Spice Route · Chicken biryani', 11, 'biryani', 'Biryani', 80], ['eat-noodles', '🍜', 'Wok This Way · Hakka noodles', 8, 'noodles', 'Noodles', 60], ['eat-tacos', '🌮', 'Taco Loco · 3 tacos', 7, 'tacos', 'Tacos', 55], ['eat-fried', '🍗', 'Crispy Chicken Co · 6 piece bucket', 12, 'chicken', 'Fried chicken', 75], ['eat-sushi', '🍣', 'Tokyo Roll · Sushi box', 15, 'sushi', 'Sushi', 65], ['eat-dosa', '🥞', 'South Spice · Masala dosa', 6, 'dosa', 'Masala dosa', 55]];
+  function setupEats() { for (const [, ic, , p, food, n, fill] of EATS) FOODS[food] = FOODS[food] || { name: n, icon: ic, price: p, fill, fun: 6 }; for (const [id, ic, n, p, food] of EATS) if (!PRODUCTS.some((q) => q.id === id)) PRODUCTS.push({ id, cat: 'Food delivery', name: n, icon: ic, price: p, fast: true, food: { [food]: 1 }, eats: true }); }
+  function eatsHtml() { return `<p class="muted" style="margin:0 0 8px">Hot food delivered in about 30 minutes. Share the OTP with the rider.</p>${EATS.map(([id, ic, n, p]) => `<div class="rp-row"><span style="font-size:26px">${ic}</span><div style="flex:1"><b style="font-size:13px">${n}</b><div class="muted" style="font-size:12px">${fmt$(p)} + $2 delivery</div></div><button class="btn gold" data-eat="${id}" style="height:34px" ${canPay(p + 2) ? '' : 'disabled'}>Order</button></div>`).join('')}`; }
+  function wireEats() { $$('#rp-win [data-eat]').forEach((b) => (b.onclick = () => { const p = PRODUCTS.find((q) => q.id === b.dataset.eat); if (!pay(p.price + 2, `🍔 LSP Eats · ${p.name}`)) return; S.orders = S.orders || []; const id = 'EAT' + Math.floor(1000 + Math.random() * 8999); S.orders.unshift({ id, pid: p.id, at: absMin(), eta: absMin() + 30, done: false }); save(); hud(); L.sfx && L.sfx('cash'); notify(`🛵 Order ${id} placed: ${p.icon} ${p.name}. Arriving in about 30 minutes.`); openPhone('orders'); })); }
+  const JOBLIST = [['cashier', '🧾', 'Cashier', 'LSP MegaMart', 'support', 1.2], ['barista', '☕', 'Barista', 'Sky Café', 'support', 1.1], ['office', '🗂️', 'Office assistant', 'Downtown offices', 'type', 1.3], ['dev', '🧑‍💻', 'Junior developer', 'LSP Tech', 'code', 1.8], ['agent', '🧑‍✈️', 'Airport check-in agent', 'LSP Airport', 'support', 1.5], ['writer', '✍️', 'News writer', 'LSP Daily', 'type', 1.5], ['nurse', '🩺', 'Hospital receptionist', 'LSP Hospital', 'support', 1.4], ['analyst', '📊', 'Data analyst', 'Business Tower', 'code', 2.2]];
+  function jobsHtml() {
+    const j = S.job && JOBLIST.find((q) => q[0] === S.job.id);
+    return `${j ? `<div class="ph-card" style="background:linear-gradient(135deg,#14c79a,#2f6bff)"><small>Your job</small><b>${j[1]} ${j[2]}</b><small>${j[3]} · pay ×${j[5]} · ${S.job.shifts || 0} shifts</small></div><button class="btn primary" data-work="1">💼 Work a shift now</button> <button class="btn ghost" data-quit="1">Quit job</button><hr style="border:0;border-top:1px solid #e1e6ef;margin:12px 0">` : ''}<p class="muted" style="margin:0 0 8px">Open positions in LSP Town. Apply, pass the quick interview, get hired.</p>${JOBLIST.map(([id, ic, n, at, , m]) => `<div class="rp-row"><span style="font-size:24px">${ic}</span><div style="flex:1"><b>${n}</b><div class="muted" style="font-size:12px">${at} · pay ×${m}</div></div><button class="btn ghost" data-apply="${id}" style="height:34px" ${S.job && S.job.id === id ? 'disabled' : ''}>Apply</button></div>`).join('')}`;
+  }
+  const INTERVIEW = [['A customer is angry. What do you do?', ['Listen, say sorry and help fix it', 'Ignore them', 'Get angry back'], 0], ['You are late for work. What do you do?', ['Tell your manager early and say sorry', 'Do not go', 'Say nothing'], 0], ['A teammate needs help. What do you do?', ['Help them when you can', 'Laugh at them', 'Tell them to quit'], 0], ['You found a wallet at work. What do you do?', ['Hand it to the manager', 'Keep the money', 'Throw it away'], 0]];
+  function wireJobs(re) {
+    $$('#rp-win [data-apply]').forEach((b) => (b.onclick = () => { const j = JOBLIST.find((q) => q[0] === b.dataset.apply), q = INTERVIEW[Math.floor(Math.random() * INTERVIEW.length)], order = [0, 1, 2].sort(() => Math.random() - 0.5);
+      openUi(`<div class="lf-top"><h3>${j[1]} Interview · ${j[3]}</h3><button class="x" data-ui="close">✕</button></div><div class="lf-body" style="max-width:440px"><p><b>${q[0]}</b></p>${order.map((i) => `<button class="lf-opt" data-ans="${i}">${q[1][i]}</button>`).join('')}</div>`);
+      $$('#rp-win [data-ans]').forEach((a) => (a.onclick = () => { if (+a.dataset.ans === q[2]) { S.job = { id: j[0], since: S.day, shifts: 0 }; save(); L.sfx && L.sfx('win'); notify(`🎉 You're hired as ${j[2]} at ${j[3]}! Work shifts from the LSP Jobs app or your laptop.`); } else { L.sfx && L.sfx('lose'); say('😕 "Thanks for coming. We picked someone else." Try again!', 3000); } openPhone('jobs'); }));
+    }));
+    const w = $('#rp-win [data-work]'); if (w) w.onclick = () => { const j = JOBLIST.find((q) => q[0] === S.job.id); closeUi(); S.job.shifts = (S.job.shifts || 0) + 1; startShift(j[4], { mult: j[5], title: `${j[1]} ${j[2]} at ${j[3]}` }); };
+    const q = $('#rp-win [data-quit]'); if (q) q.onclick = () => { S.job = null; save(); re(); };
+  }
+  // LSP Web: a little search engine for the town
+  const WEB = [
+    [/job|work|hire|career|apply|salary/, () => ({ t: '💼 Jobs in LSP Town', a: `${JOBLIST.length} open positions: ${JOBLIST.slice(0, 4).map((j) => j[2]).join(', ')} and more.`, go: ['jobs', 'Open LSP Jobs'] })],
+    [/food|eat|hungry|pizza|burger|biryani|noodle|taco|sushi|chicken|dosa|delivery|restaurant/, () => ({ t: '🍔 Fast food near you', a: `${EATS.length} restaurants deliver now: ${EATS.slice(0, 4).map((e) => e[2].split(' · ')[0]).join(', ')}…`, go: ['eats', 'Order on LSP Eats'] })],
+    [/flight|plane|fly|airport|island|travel|holiday|vacation/, () => ({ t: '✈️ LSP International Airport', a: 'Flights to Palm Paradise, Volcano Isle, Snow Peak Island, Pirate Cove, Jungle Ruins and the Rocket Base. Book, check in, security, then your gate.', go: ['flights', 'Book a flight'] })],
+    [/house|home|apartment|rent|real estate|buy a house/, () => ({ t: '🏡 Homes in LSP Town', a: `10 house designs from $1,200 to the $7,000,000 Royal Palace, next to the garage. Apartments to rent in apartment buildings.`, go: ['home', 'Home Designer'] })],
+    [/business|company|taxin|shop|stall/, () => ({ t: '🏢 Start a business', a: 'Register for free at the Business Tower. You get a TAXIN and a stall on one of 100 floors.', go: ['biz', 'Open Business'] })],
+    [/gun|weapon|viper|mafia|fight|grenade|missile|rocket launcher/, () => ({ t: '🕴️ Mafia Tower and Viper XHP', a: 'Join the Mafia Tower, buy guns, grenades and missiles at the Viper XHP shop, and take down the Red Vipers Towers.', go: ['mafia', 'Open Mafia'] })],
+    [/weather|rain|sun|temperature/, () => ({ t: '🌤️ Weather in LSP Town', a: `${['Sunny', 'Partly cloudy', 'Clear skies', 'Warm and breezy'][S.day % 4]}, ${24 + (S.day * 7) % 9}°C. Good day for a drive.` })],
+    [/time|clock|day/, () => ({ t: '🕒 Time', a: `It is ${clockTxt()} on day ${S.day}.` })],
+    [/party|event|club|ping pong|table tennis|dance/, () => ({ t: '🎉 Party hall and LSP Club', a: 'Book the city party hall for your own event, or play table tennis, pool and darts at the LSP Club downtown.', go: ['events', 'Party Planner'] })],
+    [/sweet|mithai|candy|chocolate|snack|chips|grocer|supermarket|megamart|walmart/, () => ({ t: '🛒 LSP MegaMart', a: 'The biggest store in town, next to the airport: snacks, chocolate, sweets, drinks, groceries and more.', place: 'LSP MegaMart' })],
+    [/hospital|doctor|health|hurt/, () => ({ t: '🏥 LSP Hospital', a: 'Open 24/7 east of the Business Tower. You wake up here after a mission fails.', place: 'LSP Hospital' })],
+    [/rule|dating|date|swear/, () => ({ t: '📜 Rules', a: 'No online dating or flirting, nothing sexual, no swearing or bullying. Breaking rules gets you muted or banned.' })],
+  ];
+  function webHtml() {
+    const q = D3.webQ || '';
+    let res = '';
+    if (q) { const hit = WEB.find(([re]) => re.test(q.toLowerCase())); const r = hit ? hit[1]() : null;
+      res = r ? `<div class="rp-row" style="flex-direction:column;align-items:flex-start;gap:6px"><b style="font-size:16px">${r.t}</b><span style="font-size:13px">${r.a}</span>${r.go ? `<button class="btn primary" data-wgo="${r.go[0]}" style="height:34px">${r.go[1]}</button>` : ''}${r.place ? `<button class="btn ghost" data-wplace="${r.place}" style="height:34px">📍 Directions</button>` : ''}</div>` : `<p class="muted">No exact answer for "${q.replace(/</g, '')}". LSP Web knows about: jobs, fast food, flights, houses, business, weapons, weather, parties, the supermarket and the hospital.</p>`; }
+    return `<div style="text-align:center;margin:6px 0 10px;font:700 26px Fredoka,system-ui"><span style="color:#2f6bff">L</span><span style="color:#ff4d5e">S</span><span style="color:#ffb31a">P</span> <span style="color:#14c79a">Web</span></div><input class="lf-in" id="rp-web" placeholder="🔎 Search anything" value="${q.replace(/"/g, '')}"><div class="rp-cats" style="margin:8px 0">${['jobs', 'food delivery', 'flights', 'houses', 'weather'].map((x) => `<button data-wq="${x}">${x}</button>`).join('')}</div>${res}`;
+  }
+  function wireWeb() {
+    const i = $('#rp-web'); if (i) ['keydown', 'keyup'].forEach((ev) => i.addEventListener(ev, (e) => { e.stopPropagation(); if (ev === 'keyup' && e.key === 'Enter') { D3.webQ = i.value.trim(); openPhone('web'); } }));
+    $$('#rp-win [data-wq]').forEach((b) => (b.onclick = () => { D3.webQ = b.dataset.wq; openPhone('web'); }));
+    $$('#rp-win [data-wgo]').forEach((b) => (b.onclick = () => { const id = b.dataset.wgo; if (!installed(id)) { say('Get the app from the 🛍️ Play Store first.'); return openPhone('play'); } openPhone(id); }));
+    $$('#rp-win [data-wplace]').forEach((b) => (b.onclick = () => { const p = places().find((q) => q.name === b.dataset.wplace); if (p) setGps(p); }));
+  }
+
   /* ---------- extensions (city buildings, mafia, airport) plug in here ---------- */
   const EXT = []; let KIT = null;
   function makeKit() {
-    return { get E() { return E; }, get S() { return S; }, Y0, OBJ, BUILD, obj, building, adapter, insideB, pushCols, openUi, closeUi, isUi: () => ui, say, notify, toast: (m, t) => toast(m, t), fmt$, save, hud, pay, canPay, receive, txn, cardLeft, addStuff, addNeeds, activity, stopAct, showQR, openPhone, openLaptop, setGps, places: PLACES, absMin, clockTxt, hour, curHouse, wrapA, clamp, T3, goFloor, tower: () => T3, enterCity: () => RP.enter() };
+    return { get E() { return E; }, get S() { return S; }, Y0, OBJ, BUILD, obj, building, adapter, insideB, pushCols, openUi, closeUi, isUi: () => ui, say, notify, toast: (m, t) => toast(m, t), fmt$, save, hud, pay, canPay, receive, txn, cardLeft, addStuff, addNeeds, activity, stopAct, showQR, openPhone, openLaptop, setGps, FOODS, openFridge, openStove, sleepUi, addToCart, checkout, getCart: () => cart, startShift, SET, installed, goodMorning, places: PLACES, absMin, clockTxt, hour, curHouse, wrapA, clamp, T3, goFloor, tower: () => T3, enterCity: () => RP.enter() };
   }
   /* ---------- the module LSP Drive calls ---------- */
   const RP = (window.LSPDriveRP = {
@@ -813,8 +1007,9 @@
       E.RP_LOTS.houses.forEach((_, i) => buildHouse(i));
       buildMarket(); buildTower(); fixBiz();
       const scr = $('#s-drive');
-      $('#s-drive .hud').insertAdjacentHTML('beforeend', '<span class="hudpill" id="rp-cash">$0</span><span class="hudpill" id="rp-clock"></span><span class="hudpill" id="rp-needs" title="Hunger, energy, hygiene, fun"></span><span class="hudpill" id="rp-cart" hidden></span><button class="hudpill" id="rp-phone" title="Your phone (M)">📱</button><span class="hudpill" id="rp-gps" hidden></span>');
+      $('#s-drive .hud').insertAdjacentHTML('beforeend', '<span class="hudpill" id="rp-cash">$0</span><span class="hudpill" id="rp-clock"></span><span class="hudpill" id="rp-needs" title="Hunger, energy, hygiene, fun"></span><span class="hudpill" id="rp-cart" hidden></span><button class="hudpill" id="rp-phone" title="Your phone (M)">📱</button><button class="hudpill" id="rp-set" title="Settings">⚙️</button><span class="hudpill" id="rp-gps" hidden></span>');
       $('#rp-phone').onclick = () => (ui ? closeUi() : openPhone());
+      $('#rp-set').onclick = () => (ui ? closeUi() : openPhone('settings'));
       addEventListener('keydown', (e) => { if (e.code === 'KeyM' && L.isActive('s-drive') && !/INPUT|TEXTAREA/.test((e.target && e.target.tagName) || '')) { e.preventDefault(); ui ? $('#rp-win').classList.contains('phone') && closeUi() : openPhone(); } });
       scr.insertAdjacentHTML('beforeend', '<div class="lf-act" id="rp-act" hidden><span id="rp-act-t"></span><div class="bar"><i id="rp-act-b" style="width:0%"></i></div><button id="rp-act-x">Stop</button></div><div class="lf-ui" id="rp-ui" hidden><div class="lf-win" id="rp-win"></div></div>');
       $('#rp-act-x').onclick = stopAct;
@@ -838,17 +1033,32 @@
 .qr-amt{font:700 28px Fredoka,system-ui}.qr-st{font-weight:700;color:#6b7591}
 .otp-in{display:flex;gap:8px;justify-content:center;margin:12px 0}.otp-in i{width:44px;height:52px;border-radius:10px;border:2px solid #2f6bff;display:grid;place-items:center;font:700 26px ui-monospace,monospace;font-style:normal;background:#fff;color:#16203d}
 .otp-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.otp-pad button{height:48px;border-radius:12px;border:1px solid #d9dee8;background:#fff;font:700 20px system-ui;cursor:pointer;color:#16203d}
-#rp-hp{background:#ff4d5e;color:#fff}`; document.head.appendChild(st);
+#rp-hp{background:#ff4d5e;color:#fff}
+#rp-set{cursor:pointer;border:0;font-size:16px}
+.rp-rules div{background:#fff;border:1px solid #e1e6ef;border-radius:10px;padding:8px 10px;margin-bottom:6px;font-size:13px;color:#16203d}
+body.rp-bigmsg .toast,body.rp-bigmsg #toast{font-size:18px!important;max-width:min(680px,94vw)!important;white-space:normal!important}
+#d-fail{position:absolute;inset:0;z-index:70;display:grid;place-items:center;background:radial-gradient(circle,rgba(40,0,0,.55),rgba(0,0,0,.85));animation:fadeIn .4s}#d-fail[hidden]{display:none}
+.fail-in{text-align:center;color:#fff;padding:24px;max-width:520px}.fail-in h1{font:900 clamp(40px,9vw,84px)/1 Fredoka,system-ui;color:#ff3b3b;letter-spacing:3px;margin:0 0 10px;text-shadow:0 6px 30px #f008;animation:failIn .6s cubic-bezier(.2,1.4,.4,1)}.fail-in p{margin:6px 0}.fail-in .muted{color:#ccd}
+.fail-btns{display:flex;gap:12px;justify-content:center;margin-top:18px}.fail-btns .btn{min-width:150px;height:52px;font-size:17px}
+@keyframes failIn{from{transform:scale(2.2);opacity:0}to{transform:scale(1);opacity:1}}@keyframes fadeIn{from{opacity:0}}
+#rp-gm{position:absolute;inset:0;z-index:65;display:grid;place-items:center}#rp-gm[hidden]{display:none}
+.gm-sky{position:absolute;inset:0;background:linear-gradient(#ffb36b,#ffe1a8 45%,#bfe4ff);animation:fadeIn .8s;overflow:hidden}.gm-sun{position:absolute;left:50%;width:180px;height:180px;margin-left:-90px;border-radius:50%;background:radial-gradient(#fff6c2,#ffb31a);box-shadow:0 0 80px 30px #ffd56b;animation:sunUp 2.4s ease-out forwards;bottom:-200px}
+@keyframes sunUp{to{bottom:55%}}
+.gm-card{position:relative;background:#fffffff0;border-radius:24px;padding:22px 26px;text-align:center;box-shadow:0 20px 60px #0004;max-width:420px;color:#16203d;animation:failIn .7s .3s both}
+.gm-clock{position:relative;width:110px;height:120px;margin:0 auto 6px;animation:ring .12s linear infinite alternate}.gm-face{position:absolute;left:5px;top:12px;width:100px;height:100px;border-radius:50%;background:#fff;border:8px solid #ff4d5e;box-sizing:border-box}.gm-face i{position:absolute;left:50%;bottom:50%;width:4px;margin-left:-2px;background:#16203d;transform-origin:bottom center;border-radius:2px}.gm-h{height:24px;transform:rotate(210deg)}.gm-m{height:34px;transform:rotate(0)}
+.gm-bell{position:absolute;top:0;width:34px;height:22px;border-radius:30px 30px 4px 4px;background:#ff4d5e}.gm-bell.l{left:2px;transform:rotate(-30deg)}.gm-bell.r{right:2px;transform:rotate(30deg)}.gm-feet{position:absolute;bottom:0;left:22px;right:22px;height:10px;border-left:8px solid #16203d;border-right:8px solid #16203d}
+@keyframes ring{from{transform:rotate(-8deg)}to{transform:rotate(8deg)}}.gm-card h2{font:700 30px Fredoka,system-ui;margin:6px 0}.gm-btns{display:flex;gap:10px;justify-content:center;margin-top:12px}`; document.head.appendChild(st);
       $('#rp-ui').addEventListener('pointerdown', (e) => { if (e.target.id === 'rp-ui' && !shift) closeUi(); });
       addEventListener('keydown', (e) => { if (ui && e.code === 'Escape' && !shift && L.isActive('s-drive')) { e.stopImmediatePropagation(); closeUi(); } }, true);
       D3.hemi = E.scene.children.find((o) => o.isHemisphereLight); D3.bg = E.scene.background; D3.night = new E.T.Color('#0c1630'); D3.fog = E.scene.fog.color.clone();
       D3.lamp = E.M('#fffbe6', { emissive: '#fff1c2', emissiveIntensity: 0.6 });
       setHouseState(); RP.ready = true; hud();
+      setupEats(); applySet();
       KIT = makeKit(); for (const m of EXT) try { m.build && m.build(KIT); } catch (e) { console.error('drive ext', e); }
     },
     ext(m) { EXT.push(m); if (KIT && m.build) try { m.build(KIT); } catch (e) { console.error('drive ext', e); } },
     noCol: () => EXT.some((m) => m.noCol && m.noCol()),
-    enter() { S = DB.load(); if (S.home === undefined) S.home = null; fixBiz(); const F = E.getF(); F.tower = 0; if (T3.hall) T3.hall.visible = false; setHouseState(); hud(); EXT.forEach((m) => m.enter && m.enter()); if (S.home == null) setTimeout(() => toast(`🏠 You have ${fmt$(S.cash)} and no house yet. Houses for sale are next to your garage. Register a free business at the 🏢 Business Tower, work on its public computers, do deliveries, then buy a house! Press M for your phone.`, 6500), 2500); },
+    enter() { S = DB.load(); if (S.home === undefined) S.home = null; D3.guests = null; D3.wakeAt = null; applySet(); try { if (!localStorage.getItem('lspdrive.rules')) setTimeout(() => showRules(true), 900); } catch (e) {} fixBiz(); const F = E.getF(); F.tower = 0; if (T3.hall) T3.hall.visible = false; setHouseState(); hud(); EXT.forEach((m) => m.enter && m.enter()); if (S.home == null) setTimeout(() => toast(`🏠 You have ${fmt$(S.cash)} and no house yet. Houses for sale are next to your garage. Register a free business at the 🏢 Business Tower, work on its public computers, do deliveries, then buy a house! Press M for your phone.`, 6500), 2500); },
     leave() { EXT.forEach((m) => m.leave && m.leave()); stopAct(); closeUi(); cart = []; if (shift) shift = null; save(); },
     blocked: () => ui || !!(act && act.spot) || EXT.some((m) => m.blocked && m.blocked()),
     inside() { const F = E.getF(); return E.G.mode === 'foot' && (BUILD.some((b) => insideB(b, F.x, F.z)) || EXT.some((m) => m.inside && m.inside())); },
@@ -856,6 +1066,10 @@
     _S: () => S,
     _F: () => E.getF(),
     _save: () => save(),
+    maxHp: () => EXT.reduce((m, x) => Math.min(m, x.maxHp ? x.maxHp() : 100), 100),
+    inFight: () => EXT.some((x) => x.inFight && x.inFight()),
+    died() { stopAct(); closeUi(); if (shift) shift = null; EXT.forEach((m) => m.died && m.died()); if (S) { const fee = Math.min(100, Math.max(0, Math.floor(S.cash))); if (fee) pay(fee, '🏥 LSP Hospital bill'); save(); } },
+    respawned() { say('🏥 You woke up at LSP Hospital. Your car is parked outside.', 4000); EXT.forEach((m) => m.respawned && m.respawned()); },
     addCash(n) { if (!S || !(n > 0)) return; S.cash += n; save(); hud(); },
     nearest() {
       const F = E.getF(); let best = null, bd = 1e9;
@@ -911,16 +1125,16 @@
     },
     tick(dt) {
       if (!S) return;
-      const sleeping = act && act.id === 'sleep', speed = sleeping ? 15 : 1;
-      S.time += dt * MIN_PER_SEC * speed; if (S.time >= DAY_MIN) { S.time -= DAY_MIN; S.day++; say(`☀️ Day ${S.day}`); if (S.card && S.card.due > 0) { const i = Math.ceil(S.card.due * 0.02); S.card.due += i; txn('💳 Card interest (2%)', -i); } }
+      const sleeping = act && act.id === 'sleep', speed = sleeping ? 60 / mps() : 1;
+      S.time += dt * mps() * speed; if (S.time >= DAY_MIN) { S.time -= DAY_MIN; S.day++; say(`☀️ Day ${S.day}`); if (S.card && S.card.due > 0) { const i = Math.ceil(S.card.due * 0.02); S.card.due += i; txn('💳 Card interest (2%)', -i); } }
       addNeeds({ hunger: -0.09, energy: sleeping ? 0 : -0.05, hygiene: -0.035, fun: E.G.mode === 'drive' ? 0.05 : -0.05 }, dt * (sleeping ? 0.3 : 1));
-      const gm = dt * MIN_PER_SEC * speed;
+      const gm = dt * mps() * speed;
       if (S.biz) for (const bz of BIZ) { const o = S.biz[bz.id]; if (o) o.bank = Math.min(incOf(bz, o.lv) * 24, o.bank + (incOf(bz, o.lv) / 60) * gm); }
       if (shift) { shift.t -= dt; const e = $('#rp-st'); if (e) e.textContent = Math.ceil(shift.t); if (shift.t <= 0) endShift(); }
       if (act) {
         act.t += dt; addNeeds(act.gain, dt);
         $('#rp-act-b').style.width = (act.secs < 90 ? Math.min(1, act.t / act.secs) : (act.id === 'sleep' ? S.needs.energy : S.needs.fun) / 100) * 100 + '%';
-        if (act.id === 'sleep' && (S.needs.energy >= 100 || (hour() === 7 && S.needs.energy > 60))) { stopAct(); say('😊 Good morning!'); }
+        if (act.id === 'sleep' && (D3.wakeAt ? absMin() >= D3.wakeAt : S.needs.energy >= 100)) goodMorning();
         else if (act.secs < 90 && act.t >= act.secs) stopAct();
         else if ((act.id === 'tv' || act.id === 'console' || act.id === 'read') && S.needs.fun >= 100) stopAct();
         const b = curHouse(); if (b && b.F && (act && (act.id === 'tv' || act.id === 'console'))) b.F.screen.material = E.M('#5fb6ef', { emissive: ['#2f6bff', '#ff4d8b', '#14c79a'][Math.floor(act.t) % 3], emissiveIntensity: 1.2 });
