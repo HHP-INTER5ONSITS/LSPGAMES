@@ -32,10 +32,18 @@ app.use((req, res, next) => {
 // no-cache: browsers always check for the newest game files after you deploy
 // downloadable apps live on the GitHub release "apps" (built by .github/workflows/apps.yml)
 const APP_FILES = { windows: 'LSP-Games-Setup.exe', mac: 'LSP-Games.dmg', linux: 'LSP-Games.AppImage', android: 'LSP-Games.apk' };
-app.get('/download/:os', (req, res) => {
-  const f = APP_FILES[String(req.params.os).toLowerCase()];
+const appReady = new Map(); // file -> { ok, t }
+app.get('/download/:os', async (req, res) => {
+  const os = String(req.params.os).toLowerCase(), f = APP_FILES[os];
   if (!f) return res.redirect('/#download');
-  res.redirect(302, `https://github.com/HHP-INTER5ONSITS/lspgames/releases/download/apps/${f}`);
+  const url = `https://github.com/HHP-INTER5ONSITS/lspgames/releases/download/apps/${f}`;
+  let c = appReady.get(f);
+  if (!c || Date.now() - c.t > (c.ok ? 30 * 60e3 : 60e3)) {
+    try { const r = await fetch(url, { method: 'HEAD', redirect: 'manual' }); c = { ok: r.status >= 200 && r.status < 400, t: Date.now() }; } catch (e) { c = { ok: true, t: Date.now() }; }
+    appReady.set(f, c);
+  }
+  if (!c.ok) return res.redirect(`/?soon=${os}#download`);
+  res.redirect(302, url);
 });
 app.use(express.static(path.join(__dirname, 'public'), { etag: true, lastModified: true, setHeaders: (res) => res.set('Cache-Control', 'no-cache') }));
 

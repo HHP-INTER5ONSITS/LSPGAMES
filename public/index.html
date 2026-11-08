@@ -961,7 +961,11 @@ $('#st-back').onclick=()=>enterHub();
     else if (os === 'ios') st.innerHTML = '<div class="dl-ok" style="background:#eef3ff;color:#1f4fd1">On iPhone and iPad: tap <b>Share ⬆️</b> in Safari, then <b>Add to Home Screen</b>.</div>';
     else st.innerHTML = '<div class="dl-ok" style="background:#eef3ff;color:#1f4fd1">Use your browser menu to install: <b>⋮ → Install app</b> (Chrome) or the <b>⊕</b> icon in the address bar.</div>';
   }
-  function route() { const on = location.hash === '#download'; document.getElementById('dl').hidden = !on; if (on) draw(); }
+  function route() {
+    const on = location.hash === '#download'; document.getElementById('dl').hidden = !on; if (!on) return; draw();
+    const soon = new URLSearchParams(location.search).get('soon');
+    if (soon) { const st = document.getElementById('dl-state'); st.insertAdjacentHTML('afterbegin', `<div class="dl-ok" style="background:#fff6e0;color:#8a5a00;margin-bottom:8px">⏳ The ${({ windows: 'Windows', mac: 'Mac', linux: 'Linux', android: 'Android' })[soon] || ''} file is still being built. Try again in a few minutes, or install from the browser below.</div>`); }
+  }
   document.getElementById('dl-x').onclick = () => { history.replaceState(null, '', location.pathname + location.search); route(); };
   document.getElementById('dl').addEventListener('click', (e) => { if (e.target.id === 'dl') document.getElementById('dl-x').click(); });
   addEventListener('hashchange', route); route();
