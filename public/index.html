@@ -916,6 +916,15 @@ $('#st-back').onclick=()=>enterHub();
     <h2>Download LSP Games</h2>
     <p class="muted">Install it like an app: its own icon, full screen, no browser bars, and faster loading because the 3D engine stays on your device.</p>
     <div id="dl-state"></div>
+    <p style="margin:6px 0 8px"><b>Or download the app as a file</b></p>
+    <div class="dl-files">
+      <a class="dl-file" data-os="windows" href="/download/windows"><span>🪟</span><b>Windows</b><small>.exe installer</small></a>
+      <a class="dl-file" data-os="android" href="/download/android"><span>🤖</span><b>Android</b><small>.apk file</small></a>
+      <a class="dl-file" data-os="mac" href="/download/mac"><span>🍎</span><b>Mac</b><small>.dmg file</small></a>
+      <a class="dl-file" data-os="linux" href="/download/linux"><span>🐧</span><b>Linux</b><small>.AppImage</small></a>
+    </div>
+    <p class="muted" style="font-size:12px;margin:6px 0 12px">Windows may say "Windows protected your PC": click <b>More info → Run anyway</b>. Android: allow <b>Install unknown apps</b> for your browser. Mac: right-click the app → <b>Open</b>. iPhone can't install files; use Add to Home Screen below.</p>
+    <p style="margin:6px 0 8px"><b>Install from the browser</b></p>
     <div class="dl-ways">
       <div class="dl-way" data-os="android"><b>📱 Android</b><span>Tap <b>Install</b> above. Or in Chrome tap <b>⋮</b> → <b>Install app</b> (or <b>Add to Home screen</b>).</span></div>
       <div class="dl-way" data-os="ios"><b>🍎 iPhone / iPad</b><span>Open this page in <b>Safari</b>, tap the <b>Share</b> button <b>⬆️</b>, then <b>Add to Home Screen</b> → <b>Add</b>.</span></div>
@@ -932,6 +941,7 @@ $('#st-back').onclick=()=>enterHub();
 .dl-x{position:absolute;right:12px;top:12px;border:0;background:#eef1f6;border-radius:12px;width:36px;height:36px;font-size:16px;cursor:pointer}
 #dl-state{margin:16px 0}#dl-state .btn{width:100%;height:56px;font-size:18px}
 .dl-ok{background:#e7fbf4;color:#0d8a6a;border-radius:14px;padding:12px;font-weight:800}
+.dl-files{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}@media(max-width:460px){.dl-files{grid-template-columns:repeat(2,1fr)}}.dl-file{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 6px;border-radius:14px;background:#16203d;color:#fff;text-decoration:none}.dl-file span{font-size:26px}.dl-file small{opacity:.7;font-size:11px}.dl-file.me{background:#2f6bff;box-shadow:0 6px 18px #2f6bff66}
 .dl-ways{display:grid;gap:8px;text-align:left}.dl-way{display:flex;flex-direction:column;gap:2px;background:#f3f6fc;border:1px solid #dfe5f1;border-radius:14px;padding:10px 12px;font-size:14px}.dl-way.me{border-color:#2f6bff;background:#eef3ff}
 </style>
 <script>
@@ -945,6 +955,7 @@ $('#st-back').onclick=()=>enterHub();
   function draw(justInstalled) {
     const st = document.getElementById('dl-state'); if (!st) return;
     document.querySelectorAll('.dl-way').forEach((w) => w.classList.toggle('me', w.dataset.os === os));
+    const fos = /windows/i.test(navigator.userAgent) ? 'windows' : /android/i.test(navigator.userAgent) ? 'android' : /mac/i.test(navigator.userAgent) && os !== 'ios' ? 'mac' : /linux|x11|cros/i.test(navigator.userAgent) ? 'linux' : ''; document.querySelectorAll('.dl-file').forEach((w) => w.classList.toggle('me', w.dataset.os === fos));
     if (standalone() || justInstalled) st.innerHTML = '<div class="dl-ok">✅ LSP Games is installed. Open it from your home screen or app list.</div>';
     else if (deferred) { st.innerHTML = '<button class="btn primary" id="dl-go">⬇️ Install LSP Games</button>'; document.getElementById('dl-go').onclick = async () => { deferred.prompt(); const r = await deferred.userChoice; deferred = null; draw(r.outcome === 'accepted'); }; }
     else if (os === 'ios') st.innerHTML = '<div class="dl-ok" style="background:#eef3ff;color:#1f4fd1">On iPhone and iPad: tap <b>Share ⬆️</b> in Safari, then <b>Add to Home Screen</b>.</div>';

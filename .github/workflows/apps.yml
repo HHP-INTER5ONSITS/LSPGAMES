@@ -1,0 +1,62 @@
+# Builds the downloadable LSP Games apps and puts them on the "apps" release:
+#   Windows installer (.exe), Mac (.dmg), Linux (.AppImage), Android (.apk)
+# The website links to them at lspgames.onrender.com/#download (and /download/<system>).
+name: Build apps
+on:
+  push:
+    branches: [main]
+    paths: ['desktop/**', 'android/**', '.github/workflows/apps.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - os: windows-latest
+            cmd: npx electron-builder --win
+            file: desktop/dist/LSP-Games-Setup.exe
+          - os: macos-latest
+            cmd: npx electron-builder --mac
+            file: desktop/dist/LSP-Games.dmg
+          - os: ubuntu-latest
+            cmd: npx electron-builder --linux
+            file: desktop/dist/LSP-Games.AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-audit --no-fund
+        working-directory: desktop
+      - run: ${{ matrix.cmd }}
+        working-directory: desktop
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apps
+          name: LSP Games apps
+          body: 'Download LSP Games for Windows, Mac, Linux and Android. Easiest: open https://lspgames.onrender.com/#download'
+          files: ${{ matrix.file }}
+          make_latest: true
+  android:
+    needs: desktop
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v3
+        with: { gradle-version: '8.7' }
+      - run: gradle assembleDebug --no-daemon
+        working-directory: android
+      - run: cp android/app/build/outputs/apk/debug/app-debug.apk LSP-Games.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apps
+          name: LSP Games apps
+          files: LSP-Games.apk
