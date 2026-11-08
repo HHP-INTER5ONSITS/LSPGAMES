@@ -1,0 +1,34 @@
+# Windows installer build (with its log attached to the release if anything goes wrong).
+name: Build Windows app
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/win.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Build
+        shell: bash
+        working-directory: desktop
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
+        run: |
+          set -o pipefail
+          (npm install --no-audit --no-fund && npx electron-builder --win) 2>&1 | tee ../windows-build.log
+      - name: Publish installer
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apps
+          files: desktop/dist/LSP-Games-Setup.exe
+      - name: Publish log on failure
+        if: failure()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apps
+          files: windows-build.log
