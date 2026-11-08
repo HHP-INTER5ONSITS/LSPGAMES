@@ -818,7 +818,7 @@
   }
   /* ---------- settings (kept on this device) ---------- */
   const SET_KEY = 'lspdrive.settings', SPEEDS = { real: 1 / 60, slow: 1, normal: 2, fast: 4 };
-  const SET = (() => { try { return { speed: 'normal', gfx: 'high', msg: 'normal', ...(JSON.parse(localStorage.getItem(SET_KEY)) || {}) }; } catch (e) { return { speed: 'normal', gfx: 'high', msg: 'normal' }; } })();
+  const SET = (() => { try { return { wx: 'auto', speed: 'normal', gfx: 'high', msg: 'normal', ...(JSON.parse(localStorage.getItem(SET_KEY)) || {}) }; } catch (e) { return { speed: 'normal', gfx: 'high', msg: 'normal' }; } })();
   const mps = () => SPEEDS[SET.speed] || 2;
   function saveSet() { try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (e) {} applySet(); }
   function applySet() {
@@ -830,10 +830,11 @@
     const row = (k, label, opts) => `<p style="margin:12px 0 6px"><b>${label}</b></p><div class="rp-cats">${opts.map(([v, n]) => `<button data-set="${k}:${v}" class="${SET[k] === v ? 'on' : ''}">${n}</button>`).join('')}</div>`;
     return `${row('speed', '⏱️ Clock speed', [['real', 'Real time (1 min = 60 s)'], ['slow', 'Slow (1 min = 1 s)'], ['normal', 'Normal (2 min = 1 s)'], ['fast', 'Fast (4 min = 1 s)']])}
       ${row('gfx', '🖥️ Graphics', [['high', 'High (shadows)'], ['low', 'Low (faster)']])}
+      ${window.LSPDriveReal ? row('wx', '🌦️ Weather', [['auto', 'Changes by itself'], ['clear', 'Always clear'], ['rain', 'Rain'], ['storm', 'Thunderstorm']]) : ''}
       ${row('msg', '💬 Messages', [['normal', 'Normal'], ['long', 'Stay longer'], ['large', 'Large and longer']])}
       <p style="margin:14px 0 6px"><b>📜 Rules of LSP Town</b></p>${RULES_HTML}`;
   }
-  function wireSettings(re) { $$('#rp-win [data-set]').forEach((b) => (b.onclick = () => { const [k, v] = b.dataset.set.split(':'); SET[k] = v; saveSet(); L.sfx && L.sfx('click'); re(); })); }
+  function wireSettings(re) { $$('#rp-win [data-set]').forEach((b) => (b.onclick = () => { const [k, v] = b.dataset.set.split(':'); SET[k] = v; saveSet(); if (k === 'wx' && window.LSPDriveReal) LSPDriveReal.setWeather(v); L.sfx && L.sfx('click'); re(); })); }
   const RULES_HTML = `<div class="rp-rules"><div>🚫 <b>No online dating or flirting.</b> No boyfriend/girlfriend roleplay, no "date me".</div><div>🔞 <b>Nothing sexual.</b> No sexual words, jokes or roleplay.</div><div>🤬 <b>No swearing or bullying.</b> Bad words are hidden.</div><div>🛡️ Never share your address, phone number or passwords.</div><div>⚠️ Breaking the rules: the message is blocked, 3 warnings = muted, admins can ban.</div></div>`;
   function showRules(first) {
     openUi(`<div class="lf-top"><h3>📜 LSP Town rules</h3>${first ? '' : '<button class="x" data-ui="close">✕</button>'}</div><div class="lf-body" style="max-width:460px">${RULES_HTML}<button class="btn primary" data-agree="1" style="margin-top:12px;width:100%">I agree</button></div>`);
@@ -1160,7 +1161,7 @@ body.rp-bigmsg .toast,body.rp-bigmsg #toast{font-size:18px!important;max-width:m
       for (const b of BUILD) { const inn = E.G.mode === 'foot' && insideB(b, F.x, F.z); if (b.sign) b.sign.visible = !inn; }
       // day and night across the whole city
       const h = S.time / 60, day = clamp(Math.sin(((h - 6) / 24) * Math.PI * 2) * 1.6 + 0.35, 0, 1);
-      E.sun.intensity = 0.3 + 1.9 * day; if (D3.hemi) D3.hemi.intensity = 0.25 + 0.75 * day;
+      E.sun.intensity = 0.3 + 1.9 * day; RP.dayF = day; if (D3.hemi) D3.hemi.intensity = 0.25 + 0.75 * day;
       E.scene.background = day < 0.25 ? D3.night : D3.bg; E.scene.fog.color.copy(day < 0.25 ? D3.night : D3.fog);
       D3.lamp.emissiveIntensity = day < 0.5 ? 2.5 : 0.6;
       const b = curHouse(); if (b && b.lights) b.lights.forEach((l) => (l.intensity = S.home === b.house ? (day < 0.5 ? 14 : 8) : 0));

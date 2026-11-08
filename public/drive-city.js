@@ -34,6 +34,7 @@
   const BLD = []; // every enterable place
   const IN = { b: null, floor: 0, g: null, objs: [], cols: [], en: [], fx: [], targets: [] };
   const CB = { armed: false, cool: 0, gun: null, flash: 0, ko: 0 };
+  let MARBLE = null;
   const VT = {}; // per Viper tower: { cleared: Set, planted, collapse }
   let S = null;
 
@@ -108,7 +109,21 @@
     const T = E.T, g = new T.Group(); g.position.set(cx, 0, cz); E.scene.add(g);
     const V2 = K.adapter(g), W = 24;
     const tex = E.canvasTex(256, 512, (c, w, hh) => { c.fillStyle = look.body; c.fillRect(0, 0, w, hh); for (let y = 0; y < 40; y++) for (let x = 0; x < 7; x++) { c.fillStyle = Math.random() < 0.5 ? look.lit : look.dark; c.fillRect(x * 36 + 6, y * 12.8 + 3, 24, 7); } }, [1, 2]);
-    const body = V2.box(W, h, W, new T.MeshStandardMaterial({ map: tex, roughness: 0.35, metalness: 0.4, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.18 }), 0, h / 2 + 0.16, 0, g);
+    const skin = look.premium ? E.canvasTex(256, 512, (c, w, hh) => { const gr = c.createLinearGradient(0, 0, w, hh); gr.addColorStop(0, '#1a1f2b'); gr.addColorStop(0.5, '#38425a'); gr.addColorStop(1, '#141820'); c.fillStyle = gr; c.fillRect(0, 0, w, hh); for (let y = 0; y < hh; y += 16) { c.fillStyle = 'rgba(212,175,55,.85)'; c.fillRect(0, y, w, 2); } for (let x = 0; x < w; x += 32) { c.fillStyle = 'rgba(212,175,55,.9)'; c.fillRect(x, 0, 3, hh); } for (let k = 0; k < 140; k++) { c.fillStyle = 'rgba(255,214,120,.55)'; c.fillRect(Math.floor(Math.random() * 8) * 32 + 4, Math.floor(Math.random() * 32) * 16 + 3, 26, 12); } }, [2, 4]) : tex;
+    const body = V2.box(W, h, W, look.premium ? new T.MeshStandardMaterial({ map: skin, roughness: 0.12, metalness: 0.85, emissive: '#ffffff', emissiveMap: skin, emissiveIntensity: 0.12 }) : new T.MeshStandardMaterial({ map: tex, roughness: 0.35, metalness: 0.4, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.18 }), 0, h / 2 + 0.16, 0, g);
+    if (look.premium) {
+      const gold = E.M('#d4af37', { metalness: 0.9, roughness: 0.2 });
+      for (const [x, z] of [[-W / 2, -W / 2], [W / 2, -W / 2], [-W / 2, W / 2], [W / 2, W / 2]]) V2.box(1.2, h + 2, 1.2, gold, x, h / 2 + 1, z, g, false);
+      for (let k = 0; k < 3; k++) V2.box(W - k * 6, 3, W - k * 6, k % 2 ? '#111114' : gold, 0, h + 2.4 + k * 3, 0, g);
+      const sp = new T.Mesh(new T.ConeGeometry(1.2, 22, 8), gold); sp.position.set(0, h + 22, 0); g.add(sp);
+      V2.box(0.6, 0.6, 0.6, E.M('#ff2d2d', { emissive: '#ff0000', emissiveIntensity: 3 }), 0, h + 33.2, 0, g, false);
+      // entrance: canopy on gold columns, red carpet, guards, black SUVs
+      V2.box(10, 0.4, 6, '#111114', 0, 5, s * (W / 2 + 3), g); V2.box(10.2, 0.15, 6.2, gold, 0, 4.75, s * (W / 2 + 3), g, false);
+      for (const x of [-4.5, 4.5]) V2.cyl(0.3, 0.3, 4.8, gold, x, 2.55, s * (W / 2 + 5.6), g, 16);
+      V2.box(3, 0.03, 9, '#8b0000', 0, 0.18, s * (W / 2 + 4.5), g, false);
+      for (const x of [-2.2, 2.2]) { const gd = E.person('#111114', '#111114', '#8d5524', '#111114'); gd.position.set(x, 0.16, s * (W / 2 + 6.5)); gd.rotation.y = s > 0 ? 0 : Math.PI; g.add(gd); }
+      for (const x of [-9, 9]) { const suv = new T.Group(); suv.position.set(x, 0, s * (W / 2 + 8)); suv.rotation.y = Math.PI / 2; g.add(suv); const s2 = K.adapter(suv); s2.box(2, 1.1, 4.8, E.M('#0b0b0d', { metalness: 0.8, roughness: 0.15 }), 0, 0.95, 0, suv); s2.box(1.8, 0.8, 2.8, E.M('#141a22', { metalness: 0.7, roughness: 0.05 }), 0, 1.9, -0.3, suv); for (const [wx, wz] of [[-0.95, 1.5], [0.95, 1.5], [-0.95, -1.5], [0.95, -1.5]]) { const w = s2.cyl(0.45, 0.45, 0.3, '#111', wx, 0.45, wz, suv, 14); w.rotation.z = Math.PI / 2; } }
+    }
     body.receiveShadow = true;
     V2.box(W + 0.6, 0.8, W + 0.6, look.trim, 0, 5.2, 0, g, false); V2.box(W + 0.6, 1.2, W + 0.6, look.trim, 0, h + 0.7, 0, g, false);
     const top = E.textSprite(look.title, look.titleBg, look.titleFg, 20, 3); top.position.set(0, h + 3.6, s * (W / 2 + 0.6)); g.add(top);
@@ -122,7 +137,7 @@
   }
   function buildMafiaTower() {
     const l = E.RP_LOTS.mafia;
-    tower('mafia', 'mafia', E.lotC(...l), l[3] === 0 ? -1 : 1, 96, { body: '#111114', lit: '#ffd56b', dark: '#2a2a33', trim: '#d4af37', title: 'MAFIA TOWER', titleBg: '#111114', titleFg: '#d4af37', door: '🕴️ Mafia Tower · members only' });
+    tower('mafia', 'mafia', E.lotC(...l), l[3] === 0 ? -1 : 1, 96, { premium: true, body: '#111114', lit: '#ffd56b', dark: '#2a2a33', trim: '#d4af37', title: 'MAFIA TOWER', titleBg: '#111114', titleFg: '#d4af37', door: '🕴️ Mafia Tower · members only' });
   }
   function buildViperTowers() {
     E.RP_LOTS.vipers.forEach((l, i) => {
@@ -145,6 +160,7 @@
     const T = E.T, t = TYPES[b.type], hw = b.w / 2 - 0.3, hd = b.d / 2 - 0.3;
     const g = new T.Group(); g.position.set(b.x, 0, b.z); g.rotation.y = b.s > 0 ? 0 : Math.PI; E.scene.add(g);
     Object.assign(IN, { b, floor, g, hw, hd, objs: [], cols: [], en: [], targets: [], V2: K.adapter(g) });
+    if (b.g && b.type !== 'viper') b.g.visible = false; // the outside of the tower would poke into the room
     const V2 = IN.V2, Y0 = K.Y0;
     const fl = new T.Mesh(new T.PlaneGeometry(hw * 2, hd * 2), E.M(t.floor, { roughness: 0.55 })); fl.rotation.x = -Math.PI / 2; fl.position.y = Y0 + 0.01; fl.receiveShadow = true; g.add(fl);
     const ce = new T.Mesh(new T.PlaneGeometry(hw * 2, hd * 2), E.M('#f4f1ea', { side: T.DoubleSide, emissive: '#ffffff', emissiveIntensity: b.type === 'den' || b.type === 'viper' ? 0.05 : 0.25 })); ce.rotation.x = Math.PI / 2; ce.position.y = Y0 + H_IN; g.add(ce);
@@ -176,7 +192,7 @@
   }
   function leaveRoom() {
     if (!IN.b) return;
-    const F = E.getF(), was = IN.b; clearRoom(); IN.b = null; IN.mission = null; IN.squad = null; IN.unit = false;
+    const F = E.getF(), was = IN.b; clearRoom(); IN.b = null; if (was.g && was.type !== 'viper') was.g.visible = true; IN.mission = null; IN.squad = null; IN.unit = false;
     F.x = was.x; F.z = was.z + was.s * (was.d / 2 + 1.6); F.h = was.s > 0 ? 0 : Math.PI; F.vx = F.vz = 0; F.y = K.Y0;
     if (was.type === 'viper' && !destroyed(was.id) && !VT[was.id].planted) VT[was.id].cleared = new Set(); // the Vipers fill the floors back up
     L.sfx && L.sfx('door');
@@ -280,7 +296,16 @@
       const { hw, hd } = IN, V2 = IN.V2, Y0 = K.Y0, gold = E.M('#d4af37', { metalness: 0.7, roughness: 0.3 });
       elevator(b, f, -hw + 2.5, -hd + 0.3);
       V2.box(hw * 2 - 0.4, 0.02, 2, '#7a0f16', 0, Y0 + 0.03, 0, IN.g, false);
+      if (!MARBLE) MARBLE = E.canvasTex(512, 512, (c, w, h) => { c.fillStyle = '#efeae2'; c.fillRect(0, 0, w, h); c.strokeStyle = 'rgba(120,110,100,.35)'; for (let k = 0; k < 40; k++) { c.lineWidth = Math.random() * 2; c.beginPath(); let x = Math.random() * w, y = Math.random() * h; c.moveTo(x, y); for (let q = 0; q < 8; q++) { x += (Math.random() - 0.5) * 80; y += Math.random() * 50; c.lineTo(x, y); } c.stroke(); } c.strokeStyle = 'rgba(212,175,55,.6)'; c.lineWidth = 3; for (let x = 0; x <= w; x += 128) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); c.beginPath(); c.moveTo(0, x); c.lineTo(w, x); c.stroke(); } }, [3, 3]);
+      const mfl = new E.T.Mesh(new E.T.PlaneGeometry(hw * 2 - 0.2, hd * 2 - 0.2), new E.T.MeshStandardMaterial({ map: MARBLE, roughness: 0.15, metalness: 0.1 })); mfl.rotation.x = -Math.PI / 2; mfl.position.y = Y0 + 0.02; mfl.receiveShadow = true; IN.g.add(mfl);
+      for (const [u, v] of [[-hw / 2, 0], [hw / 2, 0]]) { const ch = new E.T.Group(); ch.position.set(u, Y0 + 3.2, v); IN.g.add(ch); const c2 = K.adapter(ch); c2.cyl(0.9, 0.3, 0.3, gold, 0, 0, 0, ch, 16); for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2; c2.box(0.1, 0.35, 0.1, E.M('#fff6d0', { emissive: '#ffe9a0', emissiveIntensity: 1.5 }), Math.cos(a) * 0.85, -0.25, Math.sin(a) * 0.85, ch, false); } }
+      for (const [u, v] of [[-hw + 1.2, -hd / 2], [hw - 1.2, -hd / 2], [-hw + 1.2, hd / 2 - 2], [hw - 1.2, hd / 2 - 2]]) { V2.cyl(0.35, 0.35, H_IN, gold, u, Y0 + H_IN / 2, v, IN.g, 16); IN.cols.push([u - 0.4, v - 0.4, u + 0.4, v + 0.4]); }
       if (f === 0) {
+        const art = E.canvasTex(256, 160, (c, w, h) => { c.fillStyle = '#1a1410'; c.fillRect(0, 0, w, h); for (let k = 0; k < 14; k++) { c.fillStyle = ['#8b0000', '#d4af37', '#2b2b2b', '#f2e6d0', '#5a3d24'][k % 5]; c.globalAlpha = 0.7; c.beginPath(); c.arc(Math.random() * w, Math.random() * h, 10 + Math.random() * 40, 0, 7); c.fill(); } c.globalAlpha = 1; c.strokeStyle = '#d4af37'; c.lineWidth = 10; c.strokeRect(0, 0, w, h); });
+        for (const u of [-hw / 2, hw / 2]) { const p = new E.T.Mesh(new E.T.PlaneGeometry(3, 1.9), new E.T.MeshStandardMaterial({ map: art, roughness: 0.6 })); p.position.set(u, Y0 + 2.4, -hd + 0.12); IN.g.add(p); }
+        const logo = E.textSprite('M · FAMIGLIA', '#111114', '#d4af37', 5, 0.9); logo.position.set(0, Y0 + 3.3, -hd + 0.25); IN.g.add(logo);
+        for (let k = -2; k <= 2; k++) { V2.box(0.15, 1, 0.9, '#c7cbd2', k * 1.4, Y0 + 0.5, hd - 6, IN.g, false); V2.box(0.6, 0.05, 0.05, E.M('#ff3b3b', { emissive: '#ff0000', emissiveIntensity: 1 }), k * 1.4 + 0.35, Y0 + 0.9, hd - 6, IN.g, false); }
+        for (const s of [-1, 1]) { solid(2.6, 1, 0.8, '#3a2216', s * (hw - 3), hd - 9); V2.box(2.6, 0.7, 0.25, '#3a2216', s * (hw - 3), Y0 + 1, hd - 8.6, IN.g, false); }
         for (const s of [-1, 1]) npc('#111114', s * 2, hd - 2.6, Math.PI, '#111114');
         solid(5, 1.4, 1.1, '#3a2a1a', 0, -hd + 4.2); V2.box(5.2, 0.08, 1.6, gold, 0, Y0 + 1.14, -hd + 4.2, IN.g, false);
         const don = npc('#111114', 0, -hd + 2.8, 0, '#2b2b2b'); don.scale.setScalar(1.12);

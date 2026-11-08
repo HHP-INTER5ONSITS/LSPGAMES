@@ -374,38 +374,99 @@
     }
     return g;
   }
-  const GLASS = () => M('#22303f', { metalness: 0.4, roughness: 0.08, transparent: true, opacity: 0.55 });
+  const GLASS = () => M('#1a2633', { metalness: 0.6, roughness: 0.05, transparent: true, opacity: 0.72 });
+  // People: rounded bodies with hair, eyes, hands and shoes. The joints (legs, arms) are the
+  // same pivots as before so every animation in the game keeps working.
+  const PG = {}; const pg = () => {
+    if (PG.torso) return PG;
+    PG.torso = new T.CapsuleGeometry(0.22, 0.3, 4, 12); PG.torso.scale(1.18, 1, 0.72);
+    PG.hips = new T.CapsuleGeometry(0.2, 0.06, 4, 10); PG.hips.scale(1.15, 1, 0.75);
+    PG.leg = new T.CapsuleGeometry(0.1, 0.62, 4, 8); PG.leg.translate(0, -0.42, 0);
+    PG.shoe = new T.BoxGeometry(0.17, 0.11, 0.3); PG.shoe.translate(0, -0.84, 0.05);
+    PG.arm = new T.CapsuleGeometry(0.082, 0.44, 4, 8); PG.arm.translate(0, -0.29, 0);
+    PG.hand = new T.SphereGeometry(0.075, 10, 8); PG.hand.translate(0, -0.6, 0);
+    PG.neck = new T.CylinderGeometry(0.08, 0.09, 0.14, 10);
+    PG.head = new T.SphereGeometry(0.2, 18, 14); PG.head.scale(0.95, 1.05, 1);
+    PG.hair = new T.SphereGeometry(0.212, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.52); PG.hair.scale(0.97, 1.06, 1.03);
+    PG.eye = new T.SphereGeometry(0.028, 8, 6); PG.nose = new T.SphereGeometry(0.03, 8, 6); PG.nose.scale(0.8, 1, 1.2);
+    PG.ear = new T.SphereGeometry(0.045, 8, 6); PG.ear.scale(0.5, 1, 0.8);
+    PG.cap = new T.CylinderGeometry(0.215, 0.215, 0.12, 18); PG.brim = new T.BoxGeometry(0.3, 0.03, 0.18);
+    return PG;
+  };
+  const HAIR = ['#1b1210', '#2b1b12', '#4a2f1d', '#6b4a2f', '#a07040', '#151515', '#3a2a22', '#c8a26a'];
   function person(shirt, pants, skin, hat) {
-    const g = new T.Group(), sk = M(skin || '#f1c27d'), pm = M(pants || '#2d3a5c'), sm = M(shirt || '#2f6bff');
-    const leg = (x) => { const p = new T.Group(); p.position.set(x, 0.9, 0); box(0.24, 0.9, 0.26, pm, 0, -0.45, 0, p); g.add(p); return p; };
-    const arm = (x) => { const p = new T.Group(); p.position.set(x, 1.5, 0); box(0.18, 0.62, 0.22, sm, 0, -0.29, 0, p); box(0.17, 0.14, 0.2, sk, 0, -0.66, 0, p); g.add(p); return p; };
-    g.userData.legs = [leg(-0.13), leg(0.13)]; g.userData.arms = [arm(-0.38), arm(0.38)];
-    box(0.56, 0.62, 0.32, sm, 0, 1.21, 0, g);
-    const head = box(0.38, 0.38, 0.38, sk, 0, 1.73, 0, g);
-    box(0.06, 0.07, 0.02, M('#16203d'), -0.08, 1.77, 0.2, g, false); box(0.06, 0.07, 0.02, M('#16203d'), 0.08, 1.77, 0.2, g, false);
-    box(0.16, 0.03, 0.02, M('#a0522d'), 0, 1.65, 0.2, g, false);
-    if (hat) box(0.42, 0.1, 0.42, M(hat), 0, 1.96, 0, g);
+    const G0 = pg(), g = new T.Group(), sk = M(skin || '#f1c27d', { roughness: 0.6 }), pm = M(pants || '#2d3a5c', { roughness: 0.8 }), sm = M(shirt || '#2f6bff', { roughness: 0.75 });
+    const mesh = (geo, mat, x, y, z, parent) => { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; (parent || g).add(m); return m; };
+    const shoeM = M('#1b1d22', { roughness: 0.5 }), hairM = M(HAIR[Math.abs([...String(shirt) + String(skin)].reduce((a, c) => a * 31 + c.charCodeAt(0), 7)) % HAIR.length], { roughness: 0.9 });
+    const leg = (x) => { const p = new T.Group(); p.position.set(x, 0.9, 0); mesh(G0.leg, pm, 0, 0, 0, p); mesh(G0.shoe, shoeM, 0, 0, 0, p); g.add(p); return p; };
+    const arm = (x) => { const p = new T.Group(); p.position.set(x, 1.47, 0); mesh(G0.arm, sm, 0, 0, 0, p); mesh(G0.hand, sk, 0, 0, 0, p); g.add(p); return p; };
+    g.userData.legs = [leg(-0.12), leg(0.12)]; g.userData.arms = [arm(-0.33), arm(0.33)];
+    mesh(G0.hips, pm, 0, 0.95, 0); mesh(G0.torso, sm, 0, 1.24, 0); mesh(G0.neck, sk, 0, 1.55, 0);
+    const head = mesh(G0.head, sk, 0, 1.76, 0.01);
+    mesh(G0.hair, hairM, 0, 1.79, -0.005);
+    const eyeM = M('#16181f', { roughness: 0.3 }); mesh(G0.eye, eyeM, -0.07, 1.79, 0.18).castShadow = false; mesh(G0.eye, eyeM, 0.07, 1.79, 0.18).castShadow = false;
+    mesh(G0.nose, sk, 0, 1.74, 0.2).castShadow = false; mesh(G0.ear, sk, -0.195, 1.76, 0, null).castShadow = false; mesh(G0.ear, sk, 0.195, 1.76, 0).castShadow = false;
+    box(0.09, 0.018, 0.01, M('#9a4a3a'), 0, 1.68, 0.19, g, false);
+    if (hat) { const hm = M(hat); mesh(G0.cap, hm, 0, 1.93, 0); mesh(G0.brim, hm, 0, 1.885, 0.16); }
     g.userData.head = head;
     return g;
   }
   // Seated driver: torso and head only (legs are hidden under the dash).
   function seated(shirt, skin, helmet) {
-    const g = new T.Group();
-    box(0.46, 0.5, 0.28, M(shirt || '#2f6bff'), 0, 0.27, 0, g);
-    box(0.32, 0.32, 0.32, M(helmet || skin || '#f1c27d'), 0, 0.7, 0.02, g);
+    const G0 = pg(), g = new T.Group(), add = (geo, mat, y, z) => { const m = new T.Mesh(geo, mat); m.position.set(0, y, z || 0); g.add(m); return m; };
+    add(G0.torso, M(shirt || '#2f6bff'), 0.27).scale.setScalar(0.9);
+    add(G0.head, M(skin || '#f1c27d'), 0.7, 0.02).scale.setScalar(0.85);
+    if (helmet) add(G0.head, M(helmet, { metalness: 0.3, roughness: 0.3 }), 0.72, 0.01).scale.setScalar(0.98);
+    else add(G0.hair, M('#2b1b12'), 0.72, 0.01).scale.setScalar(0.85);
     return g;
+  }
+  // Car bodies: a real side profile (bumpers, hood, windscreen, roof, rear window, boot),
+  // extruded across the width with rounded edges. One shape per body type, shared.
+  const BODY = new Map();
+  function carBody(b) {
+    if (BODY.has(b)) return BODY.get(b);
+    const y0 = b.clr, L = b.L, H = b.H, cz = b.cabZ, cl = b.cabL, top = y0 + H + b.cabH, ws = cz + cl / 2, rw = cz - cl / 2;
+    const tf = cz + cl * 0.33, tr = cz - cl * 0.41, bev = Math.min(0.12, b.W * 0.06);
+    const sh = new T.Shape(); // (z, y)
+    sh.moveTo(-L / 2 + 0.1, y0 + 0.08); sh.lineTo(L / 2 - 0.1, y0 + 0.08);
+    sh.quadraticCurveTo(L / 2 + 0.02, y0 + 0.1, L / 2, y0 + H * 0.5);
+    sh.quadraticCurveTo(L / 2 - 0.05, y0 + H * 0.92, L / 2 - 0.35, y0 + H);
+    sh.lineTo(ws, y0 + H + 0.02);
+    sh.lineTo(rw, y0 + H + 0.02);
+    sh.lineTo(-L / 2 + 0.3, y0 + H * (b.cabL > L * 0.7 ? 1 : 0.98));
+    sh.quadraticCurveTo(-L / 2 - 0.02, y0 + H * 0.9, -L / 2, y0 + H * 0.5);
+    sh.quadraticCurveTo(-L / 2 + 0.02, y0 + 0.1, -L / 2 + 0.1, y0 + 0.08);
+    const ex = (shape, width, bevel) => { const g = new T.ExtrudeGeometry(shape, { depth: width - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 10, steps: 1 }); g.rotateY(-Math.PI / 2); g.translate(width / 2 - bevel, 0, 0); g.computeVertexNormals(); return g; };
+    const body = ex(sh, b.W, bev);
+    const gh = new T.Shape(); // the glass house
+    gh.moveTo(ws + 0.02, y0 + H); gh.lineTo(tf, top); gh.lineTo(tr, top); gh.lineTo(rw - 0.02, y0 + H); gh.lineTo(ws + 0.02, y0 + H);
+    const glass = ex(gh, b.W * 0.9, 0.05);
+    const rf = new T.Shape(); rf.moveTo(tf + 0.04, top - 0.02); rf.lineTo(tf - 0.04, top + 0.06); rf.lineTo(tr + 0.06, top + 0.06); rf.lineTo(tr - 0.03, top - 0.02); rf.lineTo(tf + 0.04, top - 0.02);
+    const roof = ex(rf, b.W * 0.92, 0.04);
+    const out = { body, glass, roof, ws, rw, tf, tr, top };
+    BODY.set(b, out); return out;
   }
   function carModel(b, color, o = {}) {
     const g = new T.Group(); g.rotation.order = 'YXZ';
-    const paint = new T.MeshStandardMaterial({ color, metalness: 0.45, roughness: 0.32 });
+    const paint = new T.MeshPhysicalMaterial({ color, metalness: 0.55, roughness: 0.28, clearcoat: o.lite ? 0 : 1, clearcoatRoughness: 0.08 });
     const trim = M('#26292f', { roughness: 0.6 }), y0 = b.clr;
-    box(b.W, b.H, b.L, paint, 0, y0 + b.H / 2, 0, g);
-    box(b.W + 0.04, 0.24, 0.16, trim, 0, y0 + 0.13, b.L / 2 + 0.02, g, false);
-    box(b.W + 0.04, 0.24, 0.16, trim, 0, y0 + 0.13, -b.L / 2 - 0.02, g, false);
-    const glass = GLASS(), cg = new T.BoxGeometry(b.W * 0.88, b.cabH, b.cabL), p = cg.attributes.position;
-    for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) { p.setZ(i, p.getZ(i) * 0.74 - b.cabL * 0.04); p.setX(i, p.getX(i) * 0.93); }
-    cg.computeVertexNormals();
-    const cab = new T.Mesh(cg, [glass, glass, paint, paint, glass, glass]); cab.position.set(0, y0 + b.H + b.cabH / 2, b.cabZ); cab.castShadow = true; g.add(cab);
+    const CB = carBody(b), glass = GLASS();
+    const bodyM = new T.Mesh(CB.body, paint); bodyM.castShadow = true; g.add(bodyM);
+    const cab = new T.Mesh(CB.glass, glass); cab.castShadow = true; g.add(cab);
+    const roofM = new T.Mesh(CB.roof, paint); roofM.castShadow = true; g.add(roofM);
+    // pillars, bumpers, wheel arches, door lines and handles
+    for (const sx of [-1, 1]) {
+      const pa = box(0.06, Math.hypot(CB.ws - CB.tf, CB.top - y0 - b.H) + 0.05, 0.08, paint, sx * b.W * 0.45, (y0 + b.H + CB.top) / 2, (CB.ws + CB.tf) / 2, g, false); pa.rotation.x = Math.atan2(CB.tf - CB.ws, CB.top - y0 - b.H);
+      const pc = box(0.06, Math.hypot(CB.rw - CB.tr, CB.top - y0 - b.H) + 0.05, 0.1, paint, sx * b.W * 0.45, (y0 + b.H + CB.top) / 2, (CB.rw + CB.tr) / 2, g, false); pc.rotation.x = Math.atan2(CB.tr - CB.rw, CB.top - y0 - b.H);
+      box(0.06, b.cabH * 0.95, 0.09, paint, sx * b.W * 0.45, y0 + b.H + b.cabH * 0.48, (CB.tf + CB.tr) / 2 + 0.1, g, false);
+      box(0.02, b.H * 0.6, 0.015, M('#15171c'), sx * (b.W / 2 + 0.001), y0 + b.H * 0.55, (CB.tf + CB.tr) / 2 + 0.1, g, false);
+      for (const dz of [0.55, -0.35]) box(0.03, 0.04, 0.16, M('#c7cbd2', { metalness: 0.8, roughness: 0.25 }), sx * (b.W / 2 + 0.01), y0 + b.H * 0.8, (CB.tf + CB.tr) / 2 + 0.1 + dz, g, false);
+      box(0.04, 0.1, b.L * 0.5, M('#15171c'), sx * (b.W / 2 - 0.01), y0 + 0.1, 0, g, false);
+    }
+    box(b.W * 0.96, 0.2, 0.14, trim, 0, y0 + 0.16, b.L / 2 - 0.02, g, false);
+    box(b.W * 0.96, 0.2, 0.14, trim, 0, y0 + 0.16, -b.L / 2 + 0.02, g, false);
+    box(0.5, 0.11, 0.02, M('#f2f2f2'), 0, y0 + 0.3, -b.L / 2 - 0.06, g, false); // number plate
+    box(0.5, 0.11, 0.02, M('#f2f2f2'), 0, y0 + 0.3, b.L / 2 + 0.06, g, false);
     if (o.stripe) { box(0.36, 0.02, b.L + 0.01, M(o.stripe), 0, y0 + b.H + 0.005, 0, g, false); box(0.36, 0.02, b.cabL * 0.72, M(o.stripe), 0, y0 + b.H + b.cabH + 0.01, b.cabZ - b.cabL * 0.04, g, false); }
     if (o.taxi) { box(0.6, 0.18, 0.3, M('#ffd23f', { emissive: '#ffb800', emissiveIntensity: 0.4 }), 0, y0 + b.H + b.cabH + 0.09, b.cabZ, g, false); }
     const head = M('#fffbe6', { emissive: '#fff4c2', emissiveIntensity: 1.2 });
@@ -678,6 +739,7 @@
       const c = new T.Mesh(new T.ConeGeometry(70 + Math.random() * 70, h, 7), M('#6d8f7a', { flatShading: true })); c.position.set(Math.cos(a) * r, h / 2 - 4, Math.sin(a) * r); scene.add(c);
     }
     initFx();
+    if (window.LSPDriveReal) try { LSPDriveReal.init({ T, scene, renderer, camera, sun, M, box, merge, canvasTex, roadMat, pal, RX, NB, HALF, CELL, ROAD, LANE, PARKS, TBODY, TCOLORS, carBody, person, G, getF: () => F, getP: () => P, K, TIN, sfx, puff, addCol }); } catch (e) { console.error('realism', e); }
     if (window.LSPDriveRP) try { window.LSPDriveRP.build({ renderer, SPAWN, T, scene, camera, sun, M, box, canvasTex, textSprite, person, puff, addCol, lotC, RP_LOTS, G, getP: () => P, getF: () => F, K, TIN, pop, sfx, BOUND, CITY_Z1, solidAt, merge, CITY_BLDGS, ground, RX, HALF, TURF, wreckFx: (x, z) => { for (let i = 0; i < 18; i++) puff(x + rand(-4, 4), rand(0.5, 6), z + rand(-4, 4), i % 2 ? '#3a3a3a' : '#ff8a3d', 3, 1.6, rand(-2, 2), rand(1, 4), rand(-2, 2), 2.5, 0.7); }, getHeat: () => G.heat }); } catch (e) { console.error('roleplay world', e); }
     buildMiniBase();
     addEventListener('resize', resize);
@@ -815,7 +877,7 @@
       const nd = Math.random() < 0.5 && opts.includes(t.d) ? t.d : pick(opts);
       t.path.push({ p: laneP(t.ni, t.nj, nd, false), turn: nd !== t.d });
       t.ni += DIRS[nd][0]; t.nj += DIRS[nd][1]; t.d = nd;
-      t.path.push({ p: laneP(t.ni, t.nj, nd, true), turn: false });
+      t.path.push({ p: laneP(t.ni, t.nj, nd, true), turn: false, stop: [t.ni, t.nj, nd] });
     }
     const seg = t.path[0], dx = seg.p[0] - t.x, dz = seg.p[1] - t.z, dist = Math.hypot(dx, dz);
     // look ahead for anything in the lane
@@ -832,6 +894,7 @@
     if (t.ghostT > 0) t.ghostT -= dt;
     let want = seg.turn || (t.path[1] && t.path[1].turn && dist < 14) ? 6 : t.max;
     if (blocked || t.stopT > 0) want = 0;
+    if (seg.stop && dist < 10 && dist > 0.8 && window.LSPDriveReal && LSPDriveReal.red(seg.stop[0], seg.stop[1], seg.stop[2])) { want = 0; blocked = false; t.waitT = 0; }
     if (t.stopT > 0) t.stopT -= dt;
     if (blocked) { t.waitT += dt; if (t.waitT > 4 && !byPlayer) { t.ghostT = 2; t.waitT = 0; } if (byPlayer && t.waitT > 1.5 && Math.random() < dt * 0.6 && Math.hypot(P.x - t.x, P.z - t.z) < 40) sfx('horn', { volume: 0.3 }); }
     else t.waitT = 0;
@@ -1340,6 +1403,7 @@
     updCam(dt);
     sun.position.set(me.x + 60, 110, me.z + 40); sun.target.position.set(me.x, 0, me.z);
     if (RPX()) RPX().frame(dt || 0.016);
+    if (window.LSPDriveReal) LSPDriveReal.frame(dt || 0.016);
     renderer.render(scene, camera);
     // audio
     if (engine) {
