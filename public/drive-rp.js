@@ -818,18 +818,19 @@
   }
   /* ---------- settings (kept on this device) ---------- */
   const SET_KEY = 'lspdrive.settings', SPEEDS = { real: 1 / 60, slow: 1, normal: 2, fast: 4 };
-  const SET = (() => { try { return { wx: 'auto', speed: 'normal', gfx: 'high', msg: 'normal', ...(JSON.parse(localStorage.getItem(SET_KEY)) || {}) }; } catch (e) { return { speed: 'normal', gfx: 'high', msg: 'normal' }; } })();
+  const SET = (() => { try { return { wx: 'auto', speed: 'normal', gfx: L.isTouch() ? 'high' : 'ultra', msg: 'normal', ...(JSON.parse(localStorage.getItem(SET_KEY)) || {}) }; } catch (e) { return { speed: 'normal', gfx: 'high', msg: 'normal' }; } })();
   const mps = () => SPEEDS[SET.speed] || 2;
   function saveSet() { try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (e) {} applySet(); }
   function applySet() {
     const r = E && E.renderer; if (r) { const touch = L.isTouch(); r.setPixelRatio(SET.gfx === 'low' ? 0.75 : Math.min(devicePixelRatio || 1, touch ? 1.25 : 1.5)); }
     if (E && E.sun) E.sun.castShadow = SET.gfx !== 'low' && !L.isTouch();
+    if (window.LSPDrive && LSPDrive.setFx) LSPDrive.setFx(SET.gfx === 'ultra');
     document.body.classList.toggle('rp-bigmsg', SET.msg === 'large');
   }
   function settingsHtml() {
     const row = (k, label, opts) => `<p style="margin:12px 0 6px"><b>${label}</b></p><div class="rp-cats">${opts.map(([v, n]) => `<button data-set="${k}:${v}" class="${SET[k] === v ? 'on' : ''}">${n}</button>`).join('')}</div>`;
     return `${row('speed', '⏱️ Clock speed', [['real', 'Real time (1 min = 60 s)'], ['slow', 'Slow (1 min = 1 s)'], ['normal', 'Normal (2 min = 1 s)'], ['fast', 'Fast (4 min = 1 s)']])}
-      ${row('gfx', '🖥️ Graphics', [['high', 'High (shadows)'], ['low', 'Low (faster)']])}
+      ${row('gfx', '🖥️ Graphics', [['ultra', 'Ultra (glow, film look)'], ['high', 'High (shadows)'], ['low', 'Low (faster)']])}
       ${window.LSPDriveReal ? row('wx', '🌦️ Weather', [['auto', 'Changes by itself'], ['clear', 'Always clear'], ['rain', 'Rain'], ['storm', 'Thunderstorm']]) : ''}
       ${row('msg', '💬 Messages', [['normal', 'Normal'], ['long', 'Stay longer'], ['large', 'Large and longer']])}
       <p style="margin:14px 0 6px"><b>📜 Rules of LSP Town</b></p>${RULES_HTML}`;

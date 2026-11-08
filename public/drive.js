@@ -494,7 +494,7 @@
     // driver (right-hand drive: India drives on the left, so the driver sits on the right = local -x)
     const seatX = -b.W * 0.22, seatY = y0 + b.H - 0.05, seatZ = b.cabZ + 0.05;
     const drv = seated(o.shirt, o.skin, o.helmet); drv.position.set(seatX, seatY - 0.15, seatZ - 0.1); g.add(drv);
-    const parts = { g, paint, tail, wheels, steer, driver: drv, bike: false, wr: b.wr };
+    const parts = { g, paint, tail, wheels, steer, driver: drv, bike: false, wr: b.wr, L: b.L, W: b.W };
     if (!o.lite) {
       // cockpit, only shown from the driver's seat
       const ck = new T.Group(); ck.visible = false; g.add(ck);
@@ -631,7 +631,7 @@
       p.geos = [];
     }
     const roofGeos = [], walkGeos = [], parkGeos = [], trees = [], lamps = [];
-    const trimGeos = [], heliGeos = [], tankGeos = [], balcGeos = [], shopGlass = [], shopFrame = [], awnings = {}, R2 = LSPG.rng(777);
+    const aoGeos = [], trimGeos = [], heliGeos = [], tankGeos = [], balcGeos = [], shopGlass = [], shopFrame = [], awnings = {}, R2 = LSPG.rng(777);
     const boxAt = (bw, bh, bd, x, y, z) => { const g = new T.BoxGeometry(bw, bh, bd); g.translate(x, y, z); return g; };
     // a wall piece whose windows line up with the floors above and below
     const facade = (p, fw, fh, fd, x, y0, z) => {
@@ -694,6 +694,7 @@
         if (tall) { const an = new T.CylinderGeometry(0.08, 0.15, 9, 6); an.translate(px - rw2 * 0.25, y + 4.5, pz + rd2 * 0.25); roofGeos.push(an); }
         // balconies on the brick and stone apartment blocks
         if (!turf && !p.glass && R2() < 0.45) for (let by = BASE + 3.5; by < h * tiers[0][1] - 3; by += 3.5) for (const bxo of [-0.25, 0.25]) balcGeos.push(boxAt(3.2, 0.18, 1.1, px + bxo * w, by, pz + (lz === 0 ? -1 : 1) * (dd / 2 + 0.55)));
+        for (const [ax, az, aw, ad] of [[px, pz - dd / 2 - 0.9, w + 1.8, 1.8], [px, pz + dd / 2 + 0.9, w + 1.8, 1.8], [px - w / 2 - 0.9, pz, 1.8, dd], [px + w / 2 + 0.9, pz, 1.8, dd]]) { const ag = new T.PlaneGeometry(aw, ad); ag.rotateX(-Math.PI / 2); const u = ag.attributes.uv, pp = ag.attributes.position; for (let i = 0; i < u.count; i++) { const dx = (pp.getX(i) * 2) / aw, dz = (pp.getZ(i) * 2) / ad; const near = aw > ad ? (az < pz ? dz : -dz) : (ax < px ? dx : -dx); u.setXY(i, 0.5, near > 0 ? 0 : 1); } ag.translate(ax, 0.2, az); aoGeos.push(ag); }
         if (R() < 0.5) { R(); R(); } // keep the old random sequence so the city layout stays the same
         addCol(px - w / 2, pz - dd / 2, px + w / 2, pz + dd / 2); CITY_BLDGS.push({ x: px, z: pz, w, d: dd, h, turf, bx, bz, lx, lz });
         if (R() < 0.35) { const side = R() < 0.5 ? 1 : -1; trees.push([px + side * (w / 2 + 2.2), pz + (R() - 0.5) * 10, 0.7]); }
@@ -708,6 +709,8 @@
       add(shopGlass, new T.MeshStandardMaterial({ name: 'shopGlass', map: shopTex, emissive: '#ffffff', emissiveMap: shopTex, emissiveIntensity: 0.35, roughness: 0.08, metalness: 0.4 }), false);
       add(shopFrame, M('#2b3036', { roughness: 0.5, metalness: 0.4 }), true);
       for (const c in awnings) add(awnings[c], M(c, { roughness: 0.8 }), true);
+      const aoTex = canvasTex(4, 64, (g) => { const gr = g.createLinearGradient(0, 64, 0, 0); gr.addColorStop(0, 'rgba(0,0,0,0.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 4, 64); });
+      if (aoGeos.length) { const ao = new T.Mesh(merge(aoGeos), new T.MeshBasicMaterial({ map: aoTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })); ao.renderOrder = 1; scene.add(ao); }
       WORLD.shopGlassLit = true; }
     const addMerged = (geos, mat, cast) => { const m = new T.Mesh(merge(geos), mat); m.castShadow = !!cast; m.receiveShadow = true; scene.add(m); return m; };
     addMerged(roofGeos, M('#6c717a'), true);
@@ -741,8 +744,8 @@
     // trees (instanced)
     const addTrees = (list) => {
       const trunk = new T.CylinderGeometry(0.18, 0.26, 2.2, 6); trunk.translate(0, 1.1, 0);
-      const leaf = new T.IcosahedronGeometry(1.7, 0); leaf.translate(0, 3.3, 0);
-      const t1 = new T.InstancedMesh(trunk, M('#6b4a2f'), list.length), t2 = new T.InstancedMesh(leaf, M('#3f8a3a', { flatShading: true }), list.length);
+      const leaf = merge([[0, 3.4, 0, 1.6], [0.9, 3.0, 0.3, 1.1], [-0.8, 3.1, -0.4, 1.15], [0.2, 4.3, -0.2, 1.1], [-0.3, 3.0, 0.9, 1.0]].map(([x, y, z, r]) => { const q = new T.IcosahedronGeometry(r, 1); q.translate(x, y, z); return q; })); trunk.translate(0, 0, 0);
+      const t1 = new T.InstancedMesh(trunk, M('#6b4a2f'), list.length), t2 = new T.InstancedMesh(leaf, M('#3f8a3a', { roughness: 0.85 }), list.length);
       const m = new T.Matrix4(), q = new T.Quaternion(), e = new T.Euler(), c = new T.Color();
       list.forEach(([x, z, s], i) => { q.setFromEuler(e.set(0, Math.random() * 6, 0)); m.compose(new T.Vector3(x, ground(x, z) + 0.1, z), q, new T.Vector3(s, s, s)); t1.setMatrixAt(i, m); t2.setMatrixAt(i, m); t2.setColorAt(i, c.setHSL(0.27 + Math.random() * 0.08, 0.45, 0.3 + Math.random() * 0.12)); });
       t1.castShadow = t2.castShadow = true; scene.add(t1); scene.add(t2);
@@ -1253,7 +1256,30 @@
   function resize() {
     if (!renderer) return;
     const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    if (FX.comp) { FX.comp.setPixelRatio(renderer.getPixelRatio()); FX.comp.setSize(w, h); if (FX.fxaa) FX.fxaa.material.uniforms.resolution.value.set(1 / (w * renderer.getPixelRatio()), 1 / (h * renderer.getPixelRatio())); }
     $('#s-drive').classList.toggle('portrait', h > w);
+  }
+
+  // Cinematic look (Graphics: Ultra): glow around lights and the sun, film-like colour and soft edges
+  const FX = { on: false, comp: null, loading: null };
+  function setFx(on) {
+    FX.on = !!on;
+    if (!on || FX.comp || FX.loading || !renderer) return;
+    const V = './vendor/addons/postprocessing/';
+    FX.loading = Promise.all([import(V + 'EffectComposer.js'), import(V + 'RenderPass.js'), import(V + 'UnrealBloomPass.js'), import(V + 'ShaderPass.js'), import(V + 'OutputPass.js'), import('./vendor/addons/shaders/FXAAShader.js')]).then(([ec, rp, ub, sp, op, fx]) => {
+      const w = innerWidth, h = innerHeight, rt = new T.WebGLRenderTarget(w, h, { type: T.HalfFloatType, samples: 0 });
+      const comp = new ec.EffectComposer(renderer, rt); comp.setPixelRatio(renderer.getPixelRatio()); comp.setSize(w, h);
+      comp.addPass(new rp.RenderPass(scene, camera));
+      FX.bloom = new ub.UnrealBloomPass(new T.Vector2(w, h), 0.32, 0.55, 0.88); comp.addPass(FX.bloom);
+      const grade = new sp.ShaderPass({ uniforms: { tDiffuse: { value: null }, vig: { value: 0.32 }, sat: { value: 1.08 }, warm: { value: 0.02 } },
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+        fragmentShader: `uniform sampler2D tDiffuse; uniform float vig, sat, warm; varying vec2 vUv;
+          void main(){ vec4 c = texture2D(tDiffuse, vUv); float l = dot(c.rgb, vec3(0.299,0.587,0.114)); c.rgb = mix(vec3(l), c.rgb, sat);
+            c.rgb += vec3(warm, warm * 0.4, -warm); vec2 d = vUv - 0.5; c.rgb *= 1.0 - vig * dot(d, d) * 2.2; gl_FragColor = c; }` });
+      comp.addPass(new op.OutputPass()); comp.addPass(grade);
+      FX.fxaa = new sp.ShaderPass(fx.FXAAShader); FX.fxaa.material.uniforms.resolution.value.set(1 / (w * renderer.getPixelRatio()), 1 / (h * renderer.getPixelRatio())); comp.addPass(FX.fxaa);
+      FX.comp = comp;
+    }).catch((e) => { console.warn('effects off', e); FX.on = false; });
   }
 
   /* ================= main loop ================= */
@@ -1390,6 +1416,7 @@
       const sp = Math.abs(fwdSpeed(P));
       if (P.slip > 5 && sp > 8 && !P.air) {
         if (G.t - G.skidT > 0.32) { G.skidT = G.t; sfx('skid', { volume: 0.45 }); }
+        if (window.LSPDriveReal && LSPDriveReal.skid) LSPDriveReal.skid(P, sp);
         if (P.x <= PARK_X0) puff(P.x, 0.4, P.z, '#e8e8e8', 1.1, 0.9, rand(-1, 1), 0.6, rand(-1, 1), 2.2, 0.45);
       }
       if (P.x > PARK_X0 && sp > 8 && Math.random() < dt * 20) puff(P.x - P.vx * 0.05, P.y + 0.4, P.z - P.vz * 0.05, '#c9a57a', 1.2, 1.1, rand(-1, 1), 0.8, rand(-1, 1), 2.4, 0.55);
@@ -1449,7 +1476,7 @@
     sun.position.set(me.x + 60, 110, me.z + 40); sun.target.position.set(me.x, 0, me.z);
     if (RPX()) RPX().frame(dt || 0.016);
     if (window.LSPDriveReal) LSPDriveReal.frame(dt || 0.016);
-    renderer.render(scene, camera);
+    if (FX.on && FX.comp) FX.comp.render(); else renderer.render(scene, camera);
     // audio
     if (engine) {
       const sp = Math.abs(fwdSpeed(P)), frac = clamp(sp / (P.s.top * 1.05), 0, 1), gears = P.s.bike ? 5 : 6, gp = frac * gears, gear = Math.min(gears - 1, Math.floor(gp));
@@ -1683,7 +1710,7 @@
     if (MP.mySay) { const me = G.mode === 'drive' ? P : F; if (now > MP.mySay.userData.until) { scene.remove(MP.mySay); MP.mySay = null; } else MP.mySay.position.set(me.x, me.y + 3.4, me.z); }
   }
 
-  window.LSPDrive = { open: openLobby, _G: G, _P: () => P, fail: (why) => missionFailed(why), renderer: () => renderer, SPAWN,
+  window.LSPDrive = { setFx, FX, open: openLobby, _G: G, _P: () => P, fail: (why) => missionFailed(why), renderer: () => renderer, SPAWN,
     _wreckRivals() { let n = 0; for (const r of G.rivals) if (!r.dead) { wreck(r); n++; } for (const b of G.bots) b.ai.topMul = 0.2; return n; },
     playWith(room) { load(); MP.want = room; if (G.on) { mpEnd(); mpBegin(); return; } startCity(); },
     // test hook: run the simulation without rendering. keys = {thr, steer, ...}

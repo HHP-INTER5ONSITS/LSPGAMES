@@ -15,7 +15,7 @@
 
   function init(ctx) {
     C = ctx; T = ctx.T;
-    sky(); envMaps(); textures(); lights(); people(); parked(); props(); rain();
+    sky(); envMaps(); textures(); lights(); people(); parked(); props(); rain(); marks(); manholes();
     C.scene.fog.near = 160; C.scene.fog.far = 700;
   }
 
@@ -246,6 +246,42 @@
     for (const tr of C.G.traffic) if (tr.m && tr.m.tail) tr.m.tail.emissiveIntensity = tr.sp < tr.max * 0.5 ? 2.6 : dark ? 1.1 : 0.4;
   }
 
+  /* ---------- skid marks, tyre smoke and road spray ---------- */
+  function marks() {
+    const N = 900, g = new T.PlaneGeometry(0.28, 0.9); g.rotateX(-Math.PI / 2);
+    R.skidM = new T.InstancedMesh(g, new T.MeshBasicMaterial({ color: '#111214', transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 }), N);
+    R.skidM.count = 0; R.skidM.frustumCulled = false; R.skidM.renderOrder = 2; C.scene.add(R.skidM); R.skidI = 0; R.skidN = N;
+  }
+  const _m4 = () => (R._m || (R._m = { m: new T.Matrix4(), q: new T.Quaternion(), e: new T.Euler(), s: new T.Vector3(1, 1, 1), v: new T.Vector3() }));
+  function skid(P, sp) {
+    if (!R.skidM || !P.m || !P.m.g || P.s.bike && sp < 20) return;
+    const M4 = _m4(), hw = (P.m.W || 1.8) / 2 - 0.2, rz = -((P.m.L || 4.2) / 2 - 0.8);
+    for (const sx of [-hw, hw]) {
+      M4.v.set(sx, 0, rz); P.m.g.localToWorld(M4.v); M4.v.y = 0.19;
+      M4.q.setFromEuler(M4.e.set(0, P.h, 0)); M4.m.compose(M4.v, M4.q, M4.s);
+      R.skidM.setMatrixAt(R.skidI, M4.m); R.skidI = (R.skidI + 1) % R.skidN; R.skidM.count = Math.min(R.skidN, R.skidM.count + 1);
+      if (Math.random() < 0.6) C.puff(M4.v.x, 0.35, M4.v.z, '#e6e6e6', 0.5, 1.1, rnd(-0.6, 0.6), rnd(0.4, 1), rnd(-0.6, 0.6), 2.4, 0.9);
+    }
+    R.skidM.instanceMatrix.needsUpdate = true;
+  }
+  function spray(dt) {
+    if (R.rain < 0.4) return; const P = C.getP(); if (!P || !P.m || !P.m.g || C.G.mode !== 'drive') return;
+    const sp = Math.hypot(P.vx, P.vz); if (sp < 8 || Math.random() > dt * sp * 0.9) return;
+    const v = new T.Vector3(rnd(-0.8, 0.8), 0.3, -1.8); P.m.g.localToWorld(v); C.puff(v.x, 0.3, v.z, '#cfd6de', 0.35, 0.8, -P.vx * 0.15 + rnd(-1, 1), rnd(0.6, 1.4), -P.vz * 0.15 + rnd(-1, 1), 1.5, 0.6);
+    for (const tr of C.G.traffic) if (tr.m && tr.m.g && tr.sp > 6 && Math.random() < dt * 4 && Math.hypot(tr.x - P.x, tr.z - P.z) < 60) C.puff(tr.x, 0.3, tr.z, '#cfd6de', 0.3, 0.7, rnd(-1, 1), 0.8, rnd(-1, 1), 1.2, 0.5);
+  }
+  // manhole covers and drains in the roads
+  function manholes() {
+    const { RX, NB, HALF, CELL } = C, list = [], drains = [];
+    for (let i = 0; i <= NB; i++) for (let j = 0; j < NB; j++) { const a = RX(j) + HALF + (CELL - HALF * 2) * (0.3 + ((i * 7 + j * 3) % 5) * 0.1); list.push([RX(i) + (i % 2 ? 1.8 : -1.8), a], [a, RX(i) + (j % 2 ? 1.8 : -1.8)]); drains.push([RX(i) + HALF - 0.5, a + 6], [a + 6, RX(i) - HALF + 0.5]); }
+    const tex = C.canvasTex(64, 64, (g) => { g.fillStyle = '#2d2f33'; g.beginPath(); g.arc(32, 32, 31, 0, 7); g.fill(); g.strokeStyle = '#4a4d53'; g.lineWidth = 3; for (let r = 8; r < 30; r += 7) { g.beginPath(); g.arc(32, 32, r, 0, 7); g.stroke(); } for (let k = 0; k < 8; k++) { g.beginPath(); g.moveTo(32, 32); g.lineTo(32 + Math.cos(k * 0.785) * 30, 32 + Math.sin(k * 0.785) * 30); g.stroke(); } });
+    const inst = (geo, mat, arr) => { const m = new T.InstancedMesh(geo, mat, arr.length), M4 = _m4(); arr.forEach(([x, z], k) => { M4.m.makeTranslation(x, 0.195, z); m.setMatrixAt(k, M4.m); }); m.frustumCulled = false; m.receiveShadow = true; C.scene.add(m); };
+    const disc = new T.CircleGeometry(0.45, 20); disc.rotateX(-Math.PI / 2);
+    inst(disc, new T.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.4, metalness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }), list);
+    const gr = new T.PlaneGeometry(0.5, 0.9); gr.rotateX(-Math.PI / 2);
+    inst(gr, new T.MeshStandardMaterial({ map: C.canvasTex(32, 64, (g) => { g.fillStyle = '#1b1c1f'; g.fillRect(0, 0, 32, 64); g.fillStyle = '#55585e'; for (let y = 4; y < 64; y += 8) g.fillRect(3, y, 26, 3); }), roughness: 0.6, metalness: 0.5, polygonOffset: true, polygonOffsetFactor: -2 }), drains);
+  }
+
   /* ---------- every frame ---------- */
   function frame(dt) {
     if (!C) return; const cam = C.camera.position;
@@ -270,7 +306,9 @@
     if (R.bmats) for (const m of R.bmats) m.emissiveIntensity = glow * 1.1;
     if (R.shopM === undefined) { R.shopM = null; C.scene.traverse((o) => { if (o.material && o.material.name === 'shopGlass') R.shopM = o.material; }); }
     if (R.shopM) R.shopM.emissiveIntensity = 0.3 + glow * 1.2;
-    tickLights(); tickWeather(dt); tickPeople(dt); tickCar(dt);
+    tickLights(); tickWeather(dt); tickPeople(dt); tickCar(dt); spray(dt);
+    // fade the skid marks a little when it rains, and set the glow for the cinematic look
+    if (window.LSPDrive && LSPDrive.FX && LSPDrive.FX.bloom) LSPDrive.FX.bloom.strength = 0.22 + glow * 0.5 + wet * 0.1;
   }
-  window.LSPDriveReal = { init, frame, red, setWeather, get weather() { return R.wx; }, R };
+  window.LSPDriveReal = { skid, init, frame, red, setWeather, get weather() { return R.wx; }, R };
 })();
