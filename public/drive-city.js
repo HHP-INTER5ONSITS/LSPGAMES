@@ -125,6 +125,10 @@
       for (const x of [-9, 9]) { const suv = new T.Group(); suv.position.set(x, 0, s * (W / 2 + 8)); suv.rotation.y = Math.PI / 2; g.add(suv); const s2 = K.adapter(suv); s2.box(2, 1.1, 4.8, E.M('#0b0b0d', { metalness: 0.8, roughness: 0.15 }), 0, 0.95, 0, suv); s2.box(1.8, 0.8, 2.8, E.M('#141a22', { metalness: 0.7, roughness: 0.05 }), 0, 1.9, -0.3, suv); for (const [wx, wz] of [[-0.95, 1.5], [0.95, 1.5], [-0.95, -1.5], [0.95, -1.5]]) { const w = s2.cyl(0.45, 0.45, 0.3, '#111', wx, 0.45, wz, suv, 14); w.rotation.z = Math.PI / 2; } }
     }
     body.receiveShadow = true;
+    // real tower details: glass lobby, floor ledges, parapet, roof plant, antenna and aircraft light
+    V2.box(W + 0.1, 4.6, W + 0.1, E.M('#1f2a36', { metalness: 0.6, roughness: 0.08, emissive: '#3a2c14', emissiveIntensity: 0.4 }), 0, 2.46, 0, g, false);
+    for (let y = 9; y < h - 3; y += 10.5) V2.box(W + 0.35, 0.25, W + 0.35, look.premium ? E.M('#d4af37', { metalness: 0.9, roughness: 0.2 }) : '#c9c6bf', 0, y, 0, g, false);
+    if (!look.premium) { for (const [sx, sz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) V2.box(sx ? 0.35 : W, 1.2, sz ? 0.35 : W, '#c9c6bf', sx * (W / 2 - 0.17), h + 1.9, sz * (W / 2 - 0.17), g, false); V2.box(6, 2.6, 5, '#8a8f98', -4, h + 2.6, 3, g); V2.cyl(1.5, 1.5, 3, '#7a5c3a', 5, h + 3.8, -4, g, 14); const an = V2.cyl(0.1, 0.18, 12, '#9aa3b5', 0, h + 7.3, 0, g, 6); an.castShadow = false; V2.box(0.45, 0.45, 0.45, E.M('#ff2d2d', { emissive: '#ff0000', emissiveIntensity: 3 }), 0, h + 13.4, 0, g, false); }
     V2.box(W + 0.6, 0.8, W + 0.6, look.trim, 0, 5.2, 0, g, false); V2.box(W + 0.6, 1.2, W + 0.6, look.trim, 0, h + 0.7, 0, g, false);
     const top = E.textSprite(look.title, look.titleBg, look.titleFg, 20, 3); top.position.set(0, h + 3.6, s * (W / 2 + 0.6)); g.add(top);
     V2.box(3.2, 3.4, 0.4, '#111111', 0, 1.85, s * (W / 2 + 0.1), g, false); V2.box(2.4, 2.8, 0.42, E.M(look.trim, { metalness: 0.6, roughness: 0.3 }), 0, 1.6, s * (W / 2 + 0.12), g, false);

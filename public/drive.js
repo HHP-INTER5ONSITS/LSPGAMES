@@ -631,6 +631,24 @@
       p.geos = [];
     }
     const roofGeos = [], walkGeos = [], parkGeos = [], trees = [], lamps = [];
+    const trimGeos = [], heliGeos = [], tankGeos = [], balcGeos = [], shopGlass = [], shopFrame = [], awnings = {}, R2 = LSPG.rng(777);
+    const boxAt = (bw, bh, bd, x, y, z) => { const g = new T.BoxGeometry(bw, bh, bd); g.translate(x, y, z); return g; };
+    // a wall piece whose windows line up with the floors above and below
+    const facade = (p, fw, fh, fd, x, y0, z) => {
+      const g = new T.BoxGeometry(fw, fh, fd), uv = g.attributes.uv;
+      for (let i = 0; i < uv.count; i++) { const f = Math.floor(i / 4); if (f === 2 || f === 3) { uv.setXY(i, 0.01, 0.99); continue; } const span = f < 2 ? fd : fw; uv.setXY(i, uv.getX(i) * span / 20, (y0 + uv.getY(i) * fh) / 14); }
+      g.translate(x, y0 + fh / 2, z); p.geos.push(g);
+    };
+    // the street level: shop windows all round, a frame, and an awning over the door
+    const AWN = ['#d61f30', '#14c79a', '#2f6bff', '#ffb31a', '#16203d', '#6a3fa0', '#2f6b4f'];
+    const shopGeo = (sw2, sh2, sd2, x, z, rr) => {
+      shopGlass.push(boxAt(sw2 - 0.5, sh2 - 1.4, sd2 - 0.5, x, 0.16 + 0.4 + (sh2 - 1.4) / 2, z));
+      shopFrame.push(boxAt(sw2, 0.4, sd2, x, 0.36, z), boxAt(sw2, 1, sd2, x, 0.16 + sh2 - 0.5, z));
+      for (const [cx2, cz2] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) shopFrame.push(boxAt(0.5, sh2, 0.5, x + cx2 * (sw2 / 2 - 0.25), 0.16 + sh2 / 2, z + cz2 * (sd2 / 2 - 0.25)));
+      for (let k = -2; k <= 2; k++) { shopFrame.push(boxAt(0.12, sh2 - 1.4, sd2 + 0.02, x + k * sw2 / 6, 0.16 + 0.4 + (sh2 - 1.4) / 2, z)); shopFrame.push(boxAt(sw2 + 0.02, sh2 - 1.4, 0.12, x, 0.16 + 0.4 + (sh2 - 1.4) / 2, z + k * sd2 / 6)); }
+      const col = AWN[Math.floor(rr() * AWN.length)], a1 = new T.BoxGeometry(sw2 * 0.8, 0.12, 1.6); a1.rotateX(0.32); a1.translate(x, 0.16 + sh2 - 1.15, z - sd2 / 2 - 0.7); const a2 = a1.clone(); a2.rotateY(Math.PI); a2.translate(2 * x, 0, 2 * z);
+      (awnings[col] = awnings[col] || []).push(a1, a2);
+    };
     const R = LSPG.rng(20260);
     const special = new Set([...HIDEOUTS.map((h) => h.x + ',' + h.z), GARAGE.x + ',' + GARAGE.z, ...[...RP_LOTS.houses, RP_LOTS.market, RP_LOTS.biz, RP_LOTS.mafia, RP_LOTS.hospital, RP_LOTS.xhp, ...RP_LOTS.vipers].map((l) => lotC(...l).join(','))]);
     for (let bx = 0; bx < NB; bx++) for (let bz = 0; bz < NB; bz++) {
@@ -650,20 +668,47 @@
         const d = Math.hypot(px, pz), w = 18 + R() * 5, dd = 18 + R() * 5;
         let h = 10 + 50 * Math.exp(-(d * d) / (150 * 150)) * (0.45 + R() * 0.8) + R() * 8; h = Math.max(7, Math.round(h / 3.5) * 3.5 + 0.8);
         const p = turf ? pal[5] : pal[Math.floor(R() * (h > 38 ? 5 : 4))];
-        const g = new T.BoxGeometry(w, h, dd), uv = g.attributes.uv;
-        for (let i = 0; i < uv.count; i++) {
-          const f = Math.floor(i / 4);
-          if (f === 2 || f === 3) { uv.setXY(i, 0.01, 0.99); continue; }
-          const span = f < 2 ? dd : w; uv.setXY(i, uv.getX(i) * span / 20, uv.getY(i) * h / 14);
+        // real towers: a shop floor at street level, then the shaft with ledges, setbacks on
+        // tall ones, a parapet and roof gear on top
+        const BASE = 4.6, tall = h > 34, mid = h > 20;
+        if (!turf) shopGeo(w, BASE, dd, px, pz, R2); else facade(p, w, BASE, dd, px, 0.16, pz);
+        const tiers = tall ? [[1, 0.62], [0.82, 0.86], [0.64, 1]] : mid && R2() < 0.5 ? [[1, 0.8], [0.84, 1]] : [[1, 1]];
+        let y = BASE + 0.16, prevW = w, prevD = dd;
+        for (const [k, upto] of tiers) {
+          const tw = w * k, td = dd * k, top = 0.16 + h * upto;
+          facade(p, tw, top - y, td, px, y, pz);
+          // ledges every few floors and a cornice at each setback
+          for (let ly = y + 7; ly < top - 2; ly += 10.5) trimGeos.push(boxAt(tw + 0.3, 0.22, td + 0.3, px, ly, pz));
+          trimGeos.push(boxAt(tw + 0.6, 0.45, td + 0.6, px, top - 0.2, pz));
+          if (k < 1) { trimGeos.push(boxAt(prevW, 0.4, prevD, px, y + 0.2, pz)); for (const [sx, sz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) trimGeos.push(boxAt(sx ? 0.15 : prevW, 1, sz ? 0.15 : prevD, px + sx * prevW / 2, y + 0.6, pz + sz * prevD / 2)); }
+          prevW = tw; prevD = td; y = top;
         }
-        g.translate(px, h / 2 + 0.16, pz); p.geos.push(g);
-        const rg = new T.BoxGeometry(w - 1.2, 0.7, dd - 1.2); rg.translate(px, h + 0.16 + 0.35, pz); roofGeos.push(rg);
-        if (R() < 0.5) { const ac = new T.BoxGeometry(2.4, 1.4, 2.4); ac.translate(px + (R() - 0.5) * (w - 6), h + 0.16 + 1.2, pz + (R() - 0.5) * (dd - 6)); roofGeos.push(ac); }
+        // parapet, roof slab and the stuff on real roofs
+        const rw2 = prevW, rd2 = prevD;
+        roofGeos.push(boxAt(rw2 - 0.3, 0.3, rd2 - 0.3, px, y + 0.15, pz));
+        for (const [sx, sz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) trimGeos.push(boxAt(sx ? 0.3 : rw2, 1.1, sz ? 0.3 : rd2, px + sx * (rw2 / 2 - 0.15), y + 0.55, pz + sz * (rd2 / 2 - 0.15)));
+        const roofProp = R2();
+        if (tall && roofProp < 0.3) { const hp = new T.CylinderGeometry(Math.min(rw2, rd2) * 0.35, Math.min(rw2, rd2) * 0.35, 0.3, 24); hp.translate(px, y + 0.5, pz); heliGeos.push(hp); }
+        else if (roofProp < 0.65) { const tk = new T.CylinderGeometry(1.3, 1.3, 2.6, 12); tk.translate(px + rw2 * 0.22, y + 3.2, pz - rd2 * 0.2); tankGeos.push(tk); const cone = new T.ConeGeometry(1.45, 0.9, 12); cone.translate(px + rw2 * 0.22, y + 4.95, pz - rd2 * 0.2); tankGeos.push(cone); for (const [lx2, lz2] of [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]]) roofGeos.push(boxAt(0.15, 1.9, 0.15, px + rw2 * 0.22 + lx2, y + 0.95, pz - rd2 * 0.2 + lz2)); }
+        for (let k = 0; k < 1 + Math.floor(R2() * 3); k++) roofGeos.push(boxAt(2.2, 1.3, 1.6, px + (R2() - 0.5) * (rw2 - 5), y + 0.65, pz + (R2() - 0.5) * (rd2 - 5)));
+        if (tall) { const an = new T.CylinderGeometry(0.08, 0.15, 9, 6); an.translate(px - rw2 * 0.25, y + 4.5, pz + rd2 * 0.25); roofGeos.push(an); }
+        // balconies on the brick and stone apartment blocks
+        if (!turf && !p.glass && R2() < 0.45) for (let by = BASE + 3.5; by < h * tiers[0][1] - 3; by += 3.5) for (const bxo of [-0.25, 0.25]) balcGeos.push(boxAt(3.2, 0.18, 1.1, px + bxo * w, by, pz + (lz === 0 ? -1 : 1) * (dd / 2 + 0.55)));
+        if (R() < 0.5) { R(); R(); } // keep the old random sequence so the city layout stays the same
         addCol(px - w / 2, pz - dd / 2, px + w / 2, pz + dd / 2); CITY_BLDGS.push({ x: px, z: pz, w, d: dd, h, turf, bx, bz, lx, lz });
         if (R() < 0.35) { const side = R() < 0.5 ? 1 : -1; trees.push([px + side * (w / 2 + 2.2), pz + (R() - 0.5) * 10, 0.7]); }
       }
     }
     for (const p of pal) if (p.geos.length) { const m = new T.Mesh(merge(p.geos), p.mat); m.castShadow = m.receiveShadow = true; scene.add(m); }
+    { const add = (geos, mat, cast) => { if (!geos.length) return; const m = new T.Mesh(merge(geos), mat); m.castShadow = !!cast; m.receiveShadow = true; scene.add(m); return m; };
+      add(trimGeos, M('#d8d4cc', { roughness: 0.8 }), true); add(balcGeos, M('#c7cbd2', { roughness: 0.6, metalness: 0.3 }), true);
+      add(tankGeos, M('#7a5c3a', { roughness: 0.9 }), true);
+      const hm = add(heliGeos, new T.MeshStandardMaterial({ map: canvasTex(128, 128, (g) => { g.fillStyle = '#3d4046'; g.fillRect(0, 0, 128, 128); g.strokeStyle = '#ffd23f'; g.lineWidth = 6; g.beginPath(); g.arc(64, 64, 56, 0, 7); g.stroke(); g.fillStyle = '#ffffff'; g.font = '700 70px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('H', 64, 68); }), roughness: 0.8 }), false);
+      const shopTex = canvasTex(256, 64, (g, w2, h2) => { g.fillStyle = '#1b2531'; g.fillRect(0, 0, w2, h2); for (let x = 0; x < w2; x += 32) { const gr = g.createLinearGradient(x, 0, x, h2); gr.addColorStop(0, '#f6d9a0'); gr.addColorStop(1, '#8a6a40'); g.fillStyle = Math.random() < 0.7 ? gr : '#2a3a4c'; g.fillRect(x + 2, 4, 28, h2 - 8); g.fillStyle = 'rgba(0,0,0,.35)'; for (let k = 0; k < 3; k++) g.fillRect(x + 4 + Math.random() * 20, 20 + Math.random() * 30, 6, 10); } g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.moveTo(0, h2); g.lineTo(w2 * 0.3, 0); g.lineTo(w2 * 0.4, 0); g.lineTo(w2 * 0.1, h2); g.fill(); }, [3, 1]);
+      add(shopGlass, new T.MeshStandardMaterial({ name: 'shopGlass', map: shopTex, emissive: '#ffffff', emissiveMap: shopTex, emissiveIntensity: 0.35, roughness: 0.08, metalness: 0.4 }), false);
+      add(shopFrame, M('#2b3036', { roughness: 0.5, metalness: 0.4 }), true);
+      for (const c in awnings) add(awnings[c], M(c, { roughness: 0.8 }), true);
+      WORLD.shopGlassLit = true; }
     const addMerged = (geos, mat, cast) => { const m = new T.Mesh(merge(geos), mat); m.castShadow = !!cast; m.receiveShadow = true; scene.add(m); return m; };
     addMerged(roofGeos, M('#6c717a'), true);
     addMerged(walkGeos, M('#b9bec7', { roughness: 0.95 }), false);

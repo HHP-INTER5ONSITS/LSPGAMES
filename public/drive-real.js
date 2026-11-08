@@ -69,6 +69,7 @@
     // buildings: proper window frames, reflections and lit rooms at night
     for (const p of C.pal) {
       if (!p.mat) continue;
+      const mask = document.createElement('canvas'); mask.width = mask.height = 512; const mg = mask.getContext('2d'); mg.fillStyle = '#000'; mg.fillRect(0, 0, 512, 512);
       const tex = C.canvasTex(512, 512, (g) => {
         g.fillStyle = p.wall; g.fillRect(0, 0, 512, 512);
         for (let i = 0; i < 3000; i++) { g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.06)'; g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2); }
@@ -78,7 +79,7 @@
           const fx = p.glass ? x + 4 : x + 20, fy = p.glass ? y + 4 : y + 22, fw = p.glass ? 120 : 88, fh = p.glass ? 112 : 78;
           g.fillStyle = p.glass ? '#6f8394' : '#e9e6df'; g.fillRect(fx - 4, fy - 4, fw + 8, fh + 8);
           const gr = g.createLinearGradient(fx, fy, fx + fw * 0.6, fy + fh); if (lit > 0.82) { gr.addColorStop(0, '#fff1c4'); gr.addColorStop(1, '#e8b860'); } else { gr.addColorStop(0, p.glass ? '#bcd9ee' : '#9cc0de'); gr.addColorStop(0.45, p.win); gr.addColorStop(1, '#162232'); }
-          g.fillStyle = gr; g.fillRect(fx, fy, fw, fh);
+          g.fillStyle = gr; g.fillRect(fx, fy, fw, fh); const on = lit > 0.55; if (on) { mg.fillStyle = lit > 0.82 ? '#ffd88a' : ['#e8c27a', '#cfd8ff', '#ffe0b0'][Math.floor(lit * 30) % 3]; mg.globalAlpha = 0.55 + (lit - 0.55); mg.fillRect(fx, fy, fw, fh); mg.globalAlpha = 1; }
           g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.moveTo(fx, fy + fh * 0.6); g.lineTo(fx + fw * 0.5, fy); g.lineTo(fx + fw * 0.65, fy); g.lineTo(fx, fy + fh * 0.85); g.fill();
           g.fillStyle = p.glass ? '#55687a' : '#d8d4cc'; g.fillRect(fx + fw / 2 - 2, fy, 4, fh); g.fillRect(fx, fy + fh * 0.45, fw, 3);
           if (!p.glass && Math.random() < 0.35) { g.fillStyle = ['rgba(240,230,210,.85)', 'rgba(200,215,235,.85)', 'rgba(230,200,190,.85)'][Math.floor(Math.random() * 3)]; g.fillRect(fx, fy, fw * rnd(0.2, 0.45), fh); }
@@ -86,6 +87,7 @@
         }
         g.fillStyle = p.wall; g.fillRect(0, 0, 10, 10);
       });
+      const em = new T.CanvasTexture(mask); em.colorSpace = T.SRGBColorSpace; em.wrapS = em.wrapT = T.RepeatWrapping; em.repeat.copy(p.tex.repeat); p.mat.emissive = new T.Color('#ffffff'); p.mat.emissiveMap = em; p.mat.emissiveIntensity = 0; R.bmats = R.bmats || []; R.bmats.push(p.mat);
       tex.repeat.copy(p.tex.repeat); p.mat.map = tex; p.mat.roughness = p.glass ? 0.18 : 0.8; p.mat.metalness = p.glass ? 0.55 : 0.02; p.mat.needsUpdate = true;
     }
   }
@@ -263,6 +265,11 @@
     C.sun.intensity = (0.3 + 1.9 * day) * (1 - wet * 0.65); C.sun.color.set(day < 0.45 ? '#ffc79a' : '#fff3df');
     R.cloudM.opacity = 0.75 + wet * 0.25; R.cloudM.color.setScalar(0.35 + day * 0.65 - wet * 0.35);
     const env = wet > 0.5 ? R.envRain : day < 0.3 ? R.envNight : R.envDay; if (C.scene.environment !== env) C.scene.environment = env;
+    // lit windows and shop fronts after dark
+    const glow = Math.max(0, Math.min(1, (0.55 - day) * 2.5)) + wet * 0.25;
+    if (R.bmats) for (const m of R.bmats) m.emissiveIntensity = glow * 1.1;
+    if (R.shopM === undefined) { R.shopM = null; C.scene.traverse((o) => { if (o.material && o.material.name === 'shopGlass') R.shopM = o.material; }); }
+    if (R.shopM) R.shopM.emissiveIntensity = 0.3 + glow * 1.2;
     tickLights(); tickWeather(dt); tickPeople(dt); tickCar(dt);
   }
   window.LSPDriveReal = { init, frame, red, setWeather, get weather() { return R.wx; }, R };
