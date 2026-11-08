@@ -6,6 +6,12 @@
 <title>LSPGames</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#16203d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LSP Games">
 <link rel="icon" type="image/png" sizes="192x192" href="/logo-192.png">
 <meta property="og:image" content="/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -287,6 +293,7 @@ select:focus,input:focus{border-color:var(--brand);outline:none}
   <header class="topbar"><div class="topbar-in">
     <div class="logo"><span class="mark">▶</span>LSPGames</div>
     <div class="spacer"></div>
+    <a class="pill dl-pill" href="#download" title="Install LSP Games">⬇️ <span>Download</span></a>
     <button class="pill buy-pill" id="open-store" title="Get more points">⭐ <span class="js-points">0</span><span class="plus" aria-hidden="true">+</span></button>
     <button class="avatar" id="avatar-btn" aria-label="Account menu">P</button>
   </div></header>
@@ -902,5 +909,52 @@ $('#st-back').onclick=()=>enterHub();
 <script src="blockdrop.js"></script>
 <script src="connect4.js"></script>
 <script src="admin.js"></script>
+<div id="dl" hidden>
+  <div class="dl-card">
+    <button class="dl-x" id="dl-x" aria-label="Close">✕</button>
+    <img src="/logo-192.png" alt="" width="84" height="84" class="dl-logo">
+    <h2>Download LSP Games</h2>
+    <p class="muted">Install it like an app: its own icon, full screen, no browser bars, and faster loading because the 3D engine stays on your device.</p>
+    <div id="dl-state"></div>
+    <div class="dl-ways">
+      <div class="dl-way" data-os="android"><b>📱 Android</b><span>Tap <b>Install</b> above. Or in Chrome tap <b>⋮</b> → <b>Install app</b> (or <b>Add to Home screen</b>).</span></div>
+      <div class="dl-way" data-os="ios"><b>🍎 iPhone / iPad</b><span>Open this page in <b>Safari</b>, tap the <b>Share</b> button <b>⬆️</b>, then <b>Add to Home Screen</b> → <b>Add</b>.</span></div>
+      <div class="dl-way" data-os="desktop"><b>💻 Windows / Mac / Chromebook</b><span>In Chrome or Edge, click <b>Install</b> above, or the install icon <b>⊕</b> at the right of the address bar.</span></div>
+    </div>
+    <p class="muted" style="font-size:13px;margin-top:10px">Share this link with friends: <b>lspgames.onrender.com/#download</b></p>
+  </div>
+</div>
+<style>
+.dl-pill{text-decoration:none;color:inherit;margin-right:6px}@media(max-width:520px){.dl-pill span{display:none}}
+#dl{position:fixed;inset:0;z-index:9500;background:#0b1022cc;display:grid;place-items:center;padding:16px;overflow:auto}#dl[hidden]{display:none}
+.dl-card{position:relative;background:#fff;border-radius:24px;max-width:520px;width:100%;padding:26px 22px;text-align:center;box-shadow:0 30px 80px #0007}
+.dl-card h2{font-size:28px;margin:8px 0}.dl-logo{border-radius:22px;box-shadow:0 8px 24px #2f6bff55}
+.dl-x{position:absolute;right:12px;top:12px;border:0;background:#eef1f6;border-radius:12px;width:36px;height:36px;font-size:16px;cursor:pointer}
+#dl-state{margin:16px 0}#dl-state .btn{width:100%;height:56px;font-size:18px}
+.dl-ok{background:#e7fbf4;color:#0d8a6a;border-radius:14px;padding:12px;font-weight:800}
+.dl-ways{display:grid;gap:8px;text-align:left}.dl-way{display:flex;flex-direction:column;gap:2px;background:#f3f6fc;border:1px solid #dfe5f1;border-radius:14px;padding:10px 12px;font-size:14px}.dl-way.me{border-color:#2f6bff;background:#eef3ff}
+</style>
+<script>
+(function () {
+  let deferred = null;
+  const standalone = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+  const os = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'ios' : /android/i.test(navigator.userAgent) ? 'android' : 'desktop';
+  if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; draw(); });
+  addEventListener('appinstalled', () => { deferred = null; draw(true); });
+  function draw(justInstalled) {
+    const st = document.getElementById('dl-state'); if (!st) return;
+    document.querySelectorAll('.dl-way').forEach((w) => w.classList.toggle('me', w.dataset.os === os));
+    if (standalone() || justInstalled) st.innerHTML = '<div class="dl-ok">✅ LSP Games is installed. Open it from your home screen or app list.</div>';
+    else if (deferred) { st.innerHTML = '<button class="btn primary" id="dl-go">⬇️ Install LSP Games</button>'; document.getElementById('dl-go').onclick = async () => { deferred.prompt(); const r = await deferred.userChoice; deferred = null; draw(r.outcome === 'accepted'); }; }
+    else if (os === 'ios') st.innerHTML = '<div class="dl-ok" style="background:#eef3ff;color:#1f4fd1">On iPhone and iPad: tap <b>Share ⬆️</b> in Safari, then <b>Add to Home Screen</b>.</div>';
+    else st.innerHTML = '<div class="dl-ok" style="background:#eef3ff;color:#1f4fd1">Use your browser menu to install: <b>⋮ → Install app</b> (Chrome) or the <b>⊕</b> icon in the address bar.</div>';
+  }
+  function route() { const on = location.hash === '#download'; document.getElementById('dl').hidden = !on; if (on) draw(); }
+  document.getElementById('dl-x').onclick = () => { history.replaceState(null, '', location.pathname + location.search); route(); };
+  document.getElementById('dl').addEventListener('click', (e) => { if (e.target.id === 'dl') document.getElementById('dl-x').click(); });
+  addEventListener('hashchange', route); route();
+})();
+</script>
 </body>
 </html>

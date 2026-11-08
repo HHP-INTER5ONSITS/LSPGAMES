@@ -1,0 +1,19 @@
+{
+  "name": "LSP Games",
+  "short_name": "LSP Games",
+  "description": "LSP Drive, LSP Life and lots more 3D games with your friends.",
+  "id": "/",
+  "start_url": "/?source=app",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#16203d",
+  "theme_color": "#16203d",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "/logo-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
