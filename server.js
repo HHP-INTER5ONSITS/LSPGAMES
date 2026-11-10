@@ -23,7 +23,9 @@ const SESSION_TTL = 30 * 24 * 3600 * 1000; // stay logged in 30 days
 
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
-app.use(express.json({ limit: '10kb', verify: (req, res, buf) => { req.rawBody = buf; } }));
+const smallJson = express.json({ limit: '10kb', verify: (req, res, buf) => { req.rawBody = buf; } });
+const studioJson = express.json({ limit: '400kb' }); // LSP Studio games can be bigger
+app.use((req, res, next) => (req.path === '/api/studio/save' ? studioJson : smallJson)(req, res, next));
 app.use((req, res, next) => {
   res.set('X-Content-Type-Options', 'nosniff');
   res.set('Referrer-Policy', 'same-origin');
@@ -704,6 +706,7 @@ if (GATEWAY_MODE === 'demo') {
 setInterval(() => { const now = Date.now(); for (const [k, v] of otps) if (now > v.exp) otps.delete(k); }, 10 * 60 * 1000).unref();
 
 const FR = require('./friends')(app, { getDb: () => db, auth, allow, ipLog, nameProblem, idOfName });
+require('./studio')(app, { getDb: () => db, auth, allow, ipLog, cleanChat: FR.cleanChat, blockedChat: FR.blockedChat });
 
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: 'Server error. Try again.' }); });
 

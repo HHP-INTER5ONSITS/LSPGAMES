@@ -276,6 +276,7 @@
     for (let i = 0; i <= NB; i++) for (let j = 0; j < NB; j++) { const a = RX(j) + HALF + (CELL - HALF * 2) * (0.3 + ((i * 7 + j * 3) % 5) * 0.1); list.push([RX(i) + (i % 2 ? 1.8 : -1.8), a], [a, RX(i) + (j % 2 ? 1.8 : -1.8)]); drains.push([RX(i) + HALF - 0.5, a + 6], [a + 6, RX(i) - HALF + 0.5]); }
     const tex = C.canvasTex(64, 64, (g) => { g.fillStyle = '#2d2f33'; g.beginPath(); g.arc(32, 32, 31, 0, 7); g.fill(); g.strokeStyle = '#4a4d53'; g.lineWidth = 3; for (let r = 8; r < 30; r += 7) { g.beginPath(); g.arc(32, 32, r, 0, 7); g.stroke(); } for (let k = 0; k < 8; k++) { g.beginPath(); g.moveTo(32, 32); g.lineTo(32 + Math.cos(k * 0.785) * 30, 32 + Math.sin(k * 0.785) * 30); g.stroke(); } });
     const inst = (geo, mat, arr) => { const m = new T.InstancedMesh(geo, mat, arr.length), M4 = _m4(); arr.forEach(([x, z], k) => { M4.m.makeTranslation(x, 0.195, z); m.setMatrixAt(k, M4.m); }); m.frustumCulled = false; m.receiveShadow = true; C.scene.add(m); };
+    R.manholes = list;
     const disc = new T.CircleGeometry(0.45, 20); disc.rotateX(-Math.PI / 2);
     inst(disc, new T.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.4, metalness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }), list);
     const gr = new T.PlaneGeometry(0.5, 0.9); gr.rotateX(-Math.PI / 2);
@@ -292,15 +293,16 @@
     const wet = Math.min(1, R.rain), U = R.skyU, sunDir = U.sun.value;
     sunDir.set(0.45, -0.25 + day * 0.85, 0.35).normalize();
     const lerp3 = (a, b, c, t) => (t < 0.5 ? new T.Color(a).lerp(new T.Color(b), t * 2) : new T.Color(b).lerp(new T.Color(c), (t - 0.5) * 2));
-    U.top.value.copy(lerp3('#050a1c', '#4a5f9c', '#2f7fd6', day)).lerp(new T.Color('#4d5966'), wet * 0.8);
-    U.hor.value.copy(lerp3('#101a33', '#f2a46b', '#cfe6f7', day)).lerp(new T.Color('#8a949e'), wet * 0.8);
-    U.low.value.copy(lerp3('#0b1022', '#c98a63', '#e9f2f8', day)).lerp(new T.Color('#7f8892'), wet * 0.8);
+    const dim = 0.18 + 0.82 * Math.min(1, day * 1.4); // storm clouds are dark at night
+    U.top.value.copy(lerp3('#050a1c', '#4a5f9c', '#2f7fd6', day)).lerp(new T.Color('#4d5966').multiplyScalar(dim), wet * 0.8);
+    U.hor.value.copy(lerp3('#101a33', '#f2a46b', '#cfe6f7', day)).lerp(new T.Color('#8a949e').multiplyScalar(dim), wet * 0.8);
+    U.low.value.copy(lerp3('#0b1022', '#c98a63', '#e9f2f8', day)).lerp(new T.Color('#7f8892').multiplyScalar(dim), wet * 0.8);
     U.sunCol.value.set(day < 0.5 ? '#ffb27a' : '#fff2d6'); U.night.value = Math.max(0, 1 - day * 3) * (1 - wet);
     if (R.flash > 0) { U.top.value.lerp(new T.Color('#ffffff'), R.flash * 3); U.hor.value.lerp(new T.Color('#ffffff'), R.flash * 3); }
     C.scene.fog.color.copy(U.hor.value); C.scene.fog.near = 160 - wet * 90; C.scene.fog.far = 700 - wet * 330;
     C.sun.intensity = (0.3 + 1.9 * day) * (1 - wet * 0.65); C.sun.color.set(day < 0.45 ? '#ffc79a' : '#fff3df');
     R.cloudM.opacity = 0.75 + wet * 0.25; R.cloudM.color.setScalar(0.35 + day * 0.65 - wet * 0.35);
-    const env = wet > 0.5 ? R.envRain : day < 0.3 ? R.envNight : R.envDay; if (C.scene.environment !== env) C.scene.environment = env;
+    const env = day < 0.3 ? R.envNight : wet > 0.5 ? R.envRain : R.envDay; if (C.scene.environment !== env) C.scene.environment = env;
     // lit windows and shop fronts after dark
     const glow = Math.max(0, Math.min(1, (0.55 - day) * 2.5)) + wet * 0.25;
     if (R.bmats) for (const m of R.bmats) m.emissiveIntensity = glow * 1.1;

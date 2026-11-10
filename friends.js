@@ -201,5 +201,5 @@ module.exports = function friends(app, { getDb, auth, allow, ipLog, nameProblem,
   }
   // throw a banned player out of every open connection
   function kick(id) { const o = online.get(id); if (o) for (const w of o.socks) { try { w.send(JSON.stringify({ t: 'banned' })); w.close(); } catch {} } }
-  return { attach, cleanChat, kick };
+  return { attach, cleanChat, blockedChat, kick };
 };

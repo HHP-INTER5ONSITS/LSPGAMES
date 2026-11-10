@@ -740,6 +740,7 @@
       const m = new T.Matrix4(), q = new T.Quaternion(), e = new T.Euler(), one = new T.Vector3(1, 1, 1);
       lamps.forEach(([x, z, r], i) => { q.setFromEuler(e.set(0, r, 0)); m.compose(new T.Vector3(x, 0.16, z), q, one); im1.setMatrixAt(i, m); im2.setMatrixAt(i, m); });
       im1.castShadow = true; scene.add(im1); scene.add(im2);
+      WORLD.lamps = lamps; WORLD.lampHeads = im2;
     }
     // trees (instanced)
     const addTrees = (list) => {
@@ -748,7 +749,7 @@
       const t1 = new T.InstancedMesh(trunk, M('#6b4a2f'), list.length), t2 = new T.InstancedMesh(leaf, M('#3f8a3a', { roughness: 0.85 }), list.length);
       const m = new T.Matrix4(), q = new T.Quaternion(), e = new T.Euler(), c = new T.Color();
       list.forEach(([x, z, s], i) => { q.setFromEuler(e.set(0, Math.random() * 6, 0)); m.compose(new T.Vector3(x, ground(x, z) + 0.1, z), q, new T.Vector3(s, s, s)); t1.setMatrixAt(i, m); t2.setMatrixAt(i, m); t2.setColorAt(i, c.setHSL(0.27 + Math.random() * 0.08, 0.45, 0.3 + Math.random() * 0.12)); });
-      t1.castShadow = t2.castShadow = true; scene.add(t1); scene.add(t2);
+      t1.castShadow = t2.castShadow = true; t2.userData.leaves = true; scene.add(t1); scene.add(t2);
     };
 
     // off-road park
@@ -787,7 +788,7 @@
       const c = new T.Mesh(new T.ConeGeometry(70 + Math.random() * 70, h, 7), M('#6d8f7a', { flatShading: true })); c.position.set(Math.cos(a) * r, h / 2 - 4, Math.sin(a) * r); scene.add(c);
     }
     initFx();
-    if (window.LSPDriveReal) try { LSPDriveReal.init({ T, scene, renderer, camera, sun, M, box, merge, canvasTex, roadMat, pal, RX, NB, HALF, CELL, ROAD, LANE, PARKS, TBODY, TCOLORS, carBody, person, G, getF: () => F, getP: () => P, K, TIN, sfx, puff, addCol }); } catch (e) { console.error('realism', e); }
+    if (window.LSPDriveReal) try { LSPDriveReal.init({ WORLD, T, scene, renderer, camera, sun, M, box, merge, canvasTex, roadMat, pal, RX, NB, HALF, CELL, ROAD, LANE, PARKS, TBODY, TCOLORS, carBody, person, G, getF: () => F, getP: () => P, K, TIN, sfx, puff, addCol }); } catch (e) { console.error('realism', e); }
     if (window.LSPDriveRP) try { window.LSPDriveRP.build({ renderer, SPAWN, T, scene, camera, sun, M, box, canvasTex, textSprite, person, puff, addCol, lotC, RP_LOTS, G, getP: () => P, getF: () => F, K, TIN, pop, sfx, BOUND, CITY_Z1, solidAt, merge, CITY_BLDGS, ground, RX, HALF, TURF, wreckFx: (x, z) => { for (let i = 0; i < 18; i++) puff(x + rand(-4, 4), rand(0.5, 6), z + rand(-4, 4), i % 2 ? '#3a3a3a' : '#ff8a3d', 3, 1.6, rand(-2, 2), rand(1, 4), rand(-2, 2), 2.5, 0.7); }, getHeat: () => G.heat }); } catch (e) { console.error('roleplay world', e); }
     buildMiniBase();
     addEventListener('resize', resize);

@@ -26,6 +26,10 @@ async function mongoStore() {
   await sessions.createIndex({ exp: 1 }, { expireAfterSeconds: 0 });
   await orders.createIndex({ orderId: 1 }, { unique: true });
   await orders.createIndex({ email: 1, createdAt: -1 });
+  const games = db.collection('games');
+  await games.createIndex({ id: 1 }, { unique: true });
+  await games.createIndex({ owner: 1 });
+  await games.createIndex({ published: 1, plays: -1 });
 
   return {
     kind: 'mongodb',
@@ -76,6 +80,14 @@ async function mongoStore() {
     },
     setOrder: (orderId, fields) => orders.updateOne({ orderId, status: 'pending' }, { $set: fields }),
     async takePoints(email, n) { const u = await users.findOne({ email }); if (!u) return 0; const t = Math.min(n, u.points); if (t > 0) await users.updateOne({ email }, { $inc: { points: -t } }); return t; },
+    /* LSP Studio: games made by players. */
+    saveGame: (g) => games.updateOne({ id: g.id }, { $set: g }, { upsert: true }),
+    getGame: (id) => games.findOne({ id }, { projection: { _id: 0 } }),
+    listGames: (n) => games.find({ published: true, removed: { $ne: true } }, { projection: { _id: 0, data: 0 } }).sort({ plays: -1, updatedAt: -1 }).limit(n).toArray(),
+    listGamesBy: (owner) => games.find({ owner }, { projection: { _id: 0, data: 0 } }).sort({ updatedAt: -1 }).toArray(),
+    countGamesBy: (owner) => games.countDocuments({ owner }),
+    incGame: (id, inc) => games.updateOne({ id }, { $inc: inc }),
+    deleteGame: (id) => games.deleteOne({ id }),
   };
 }
 
@@ -84,6 +96,8 @@ function fileStore() {
   const file = process.env.DATA_FILE || path.join(__dirname, 'data.json');
   let data = { users: {}, sessions: {}, orders: {} };
   try { data = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) {}
+  data.games = data.games || {};
+  const meta = (g) => { const c = clone(g); delete c.data; return c; };
   let t = null;
   const persist = () => { clearTimeout(t); t = setTimeout(() => fs.writeFile(file, JSON.stringify(data), () => {}), 200); };
   const clone = (x) => (x ? JSON.parse(JSON.stringify(x)) : null);
@@ -125,6 +139,13 @@ function fileStore() {
     async listOrders(email) { return Object.values(data.orders).filter((o) => o.email === email).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).slice(0, 20).map(clone); },
     async claimPaid(id, info) { const o = data.orders[id]; if (!o || o.status !== 'pending') return null; Object.assign(o, { status: 'paid', paidAt: new Date().toISOString() }, info); persist(); return clone(o); },
     async takePoints(email, n) { const u = data.users[email]; if (!u) return 0; const t = Math.min(n, u.points); u.points -= t; persist(); return t; },
+    async saveGame(g) { data.games[g.id] = Object.assign(data.games[g.id] || {}, clone(g)); persist(); },
+    async getGame(id) { return clone(data.games[id]); },
+    async listGames(n) { return Object.values(data.games).filter((g) => g.published && !g.removed).sort((a, b) => (b.plays || 0) - (a.plays || 0) || (a.updatedAt < b.updatedAt ? 1 : -1)).slice(0, n).map(meta); },
+    async listGamesBy(owner) { return Object.values(data.games).filter((g) => g.owner === owner).sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)).map(meta); },
+    async countGamesBy(owner) { return Object.values(data.games).filter((g) => g.owner === owner).length; },
+    async incGame(id, inc) { const g = data.games[id]; if (!g) return; for (const [k, v] of Object.entries(inc)) g[k] = (g[k] || 0) + v; persist(); },
+    async deleteGame(id) { delete data.games[id]; persist(); },
     async setOrder(id, fields) { const o = data.orders[id]; if (o && o.status === 'pending') { Object.assign(o, fields); persist(); } },
   };
 }
