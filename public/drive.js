@@ -1593,6 +1593,7 @@
     for (const r of G.rivals) if (!r.dead) dot(r.x, r.z, '#e3263a', 8, true);
     if (G.mode === 'foot') dot(P.x, P.z, '#ffd23f', 8, true, '');
     for (const r of MP.remotes.values()) dot(r.x, r.z, '#2f6bff', 9, true, r.name[0].toUpperCase());
+    if (window.LSPDriveGTA) try { LSPDriveGTA.mini(g, dot, at, zoom); } catch (e) {}
     // player arrow
     g.save(); g.translate(W / 2, H / 2); g.rotate(rot - me.h);
     g.fillStyle = '#ffd23f'; g.strokeStyle = '#16203d'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, -16); g.lineTo(11, 12); g.lineTo(0, 6); g.lineTo(-11, 12); g.closePath(); g.fill(); g.stroke();

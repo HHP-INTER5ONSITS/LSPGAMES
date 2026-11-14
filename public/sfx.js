@@ -140,6 +140,7 @@
     if (b && !b.disabled) LSPG.sfx('click', { volume: 0.45 });
   }, true);
 
+  LSPG.audio = () => { const c = ac(); return c ? { ctx: c, master, noise: noiseBuf } : null; };
   LSPG.muted = () => muted;
   LSPG.setMuted = (m) => {
     muted = !!m;
