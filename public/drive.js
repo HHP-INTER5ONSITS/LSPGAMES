@@ -1439,11 +1439,30 @@
       tp = Math.atan2(ground(v.x + sh * half, v.z + ch * half) - ground(v.x - sh * half, v.z - ch * half), half * 2);
       if (!s.bike) tr = Math.atan2(ground(v.x - ch * 0.9, v.z + sh * 0.9) - ground(v.x + ch * 0.9, v.z - sh * 0.9), 1.8);
     } else tp = clamp(v.vy * 0.03, -0.35, 0.35);
-    v.pitch += (tp - v.pitch) * Math.min(1, dt * 10);
     const sp = v.vF || fwdSpeed(v);
-    const lean = s.bike ? clamp(v.st * Math.min(1, Math.abs(sp) / 12) * 0.55, -0.6, 0.6) : -v.st * Math.min(1, Math.abs(sp) / 25) * 0.04;
-    v.roll += (lean + tr - v.roll) * Math.min(1, dt * 8);
-    g.position.set(v.x, v.y, v.z); g.rotation.set(-v.pitch, v.h, v.roll);
+    const lean = s.bike ? clamp(v.st * Math.min(1, Math.abs(sp) / 12) * 0.55, -0.6, 0.6) : -v.st * Math.min(1, Math.abs(sp) / 25) * 0.075;
+    if (s.bike || dt <= 0) {
+      v.pitch += (tp - v.pitch) * Math.min(1, dt * 10);
+      v.roll += (lean + tr - v.roll) * Math.min(1, dt * 8);
+      v.hy = 0;
+    } else {
+      // springy suspension: weight moves forward when braking, back when speeding up, and the body
+      // bounces after bumps, curbs and landings before settling (a damped spring on pitch, roll and height)
+      const k = Math.min(dt, 1 / 30);
+      if (!(v.pv === v.pv) || v.pv == null) v.pv = 0; if (!(v.rv === v.rv) || v.rv == null) v.rv = 0; if (!(v.hvy === v.hvy) || v.hvy == null) v.hvy = 0; if (!(v.hy === v.hy) || v.hy == null) v.hy = 0;
+      if (!(v.pitch === v.pitch)) v.pitch = 0; if (!(v.roll === v.roll)) v.roll = 0;
+      v.ax = (v.ax || 0) + ((sp - (v.psp ?? sp)) / Math.max(dt, 1e-3) - (v.ax || 0)) * Math.min(1, dt * 6); v.psp = sp;
+      const tPitch = tp + clamp(v.ax * 0.0045, -0.07, 0.05);
+      v.pv = (v.pv || 0) + ((tPitch - v.pitch) * 130 - v.pv * 13) * k; v.pitch += v.pv * k;
+      v.rv = (v.rv || 0) + ((lean + tr - v.roll) * 110 - v.rv * 12) * k; v.roll += v.rv * k;
+      const dy = v.y - (v.py ?? v.y); v.py = v.y;
+      v.hy = (v.hy || 0) - (Math.abs(dy) < 0.6 ? dy * 0.55 : 0);
+      if (v.wasAir && !v.air) v.hvy = (v.hvy || 0) + Math.max(-4, Math.min(0, v.lvy || 0) * 0.3);
+      v.wasAir = v.air; if (v.air) v.lvy = v.vy;
+      v.hvy = (v.hvy || 0) + ((-v.hy) * 140 - v.hvy * 12) * k; v.hy = clamp(v.hy + v.hvy * k, -0.22, 0.18);
+    }
+    g.position.set(v.x, v.y + (v.hy || 0), v.z); g.rotation.set(-v.pitch, v.h, v.roll);
+    if (v.m.wheels) for (const w of v.m.wheels) { if (w.userData.by == null) w.userData.by = w.position.y; w.position.y = w.userData.by - (v.hy || 0) * 0.85; }
     for (const w of v.m.wheels) w.rotation.x = v.spin;
     const steerA = (-v.st * 0.5) / (1 + Math.abs(sp) / 20);
     for (const p of v.m.steer) p.rotation.y = steerA;
