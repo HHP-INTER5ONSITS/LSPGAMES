@@ -68,6 +68,7 @@
     if (W.busted || G().over || G().race) return;
     if (W.crimeCd > 0 && W.stars >= (minStars || 1)) return;
     W.crimeCd = 2.5;
+    (W.charges = W.charges || []).includes(why) || W.charges.push(why);
     const before = W.stars;
     W.stars = clamp(Math.max(W.stars + n, minStars || 0), 0, 5);
     const m = me(); W.lastSeen = { x: m.x, z: m.z }; W.seen = true; W.escT = 0;
@@ -76,7 +77,7 @@
   }
   function clearWanted(msg) {
     if (W.stars && msg && K) K.say(msg, 3500);
-    W.stars = 0; W.seen = false; W.escT = 0; W.bustT = 0;
+    W.stars = 0; W.seen = false; W.escT = 0; W.bustT = 0; W.charges = [];
     for (const c of W.cops) if (c.mode !== 'patrol') { c.mode = 'leave'; c.leaveT = 0; }
     if (W.heli) W.heli.leave = true;
   }
@@ -300,7 +301,7 @@
         const sp = Math.hypot(p.vx, p.vz);
         ped.down = 3.6;
         flying.set(ped, { vx: p.vx * 0.55 + rnd(-1.5, 1.5), vz: p.vz * 0.55 + rnd(-1.5, 1.5), vy: 3 + sp * 0.18, y: 0, ox: 0, oz: 0, spin: rnd(-8, 8) });
-        crime(1, 'You hit someone');
+        if (sp > 12) crime(1, 'Hitting someone with your car');
       }
       const f = flying.get(ped);
       if (f) {
@@ -490,8 +491,10 @@
   /* ================= setup + every frame ================= */
   function init(ctx) { C = ctx; T = ctx.T; ui(); }
   let pv = null;
+  const LAW = () => window.LSPDriveLaw;
   function frame(dt) {
     const g = G(); if (!g.on) return;
+    if (LAW() && LAW().busy()) { Radio.update(dt, false); sounds(1e9, 1e9); starsUi(); return; }
     const paused = g.paused || g.over;
     const drive = g.mode === 'drive', p = P(), m = me();
     Radio.update(dt, drive && p && !p.dead);
@@ -526,7 +529,7 @@
       W.spawnT = 3;
       if (!W.stars && patrols < (L.isTouch() ? 2 : 3) && inside) spawnCop('patrol');
       const want = [0, 2, 3, 4, 5, 6][W.stars] - (L.isTouch() ? 1 : 0);
-      if (W.stars && chasers < want) spawnCop('chase', true);
+      if (W.stars && chasers < want && W.cops.length < 10) spawnCop('chase', true);
     }
     for (const c of W.cops.slice()) {
       if (c.mode === 'patrol' && Math.hypot(c.x - m.x, c.z - m.z) > 280) { removeCop(c); continue; }
@@ -548,7 +551,7 @@
       if (seen) { W.seen = true; W.escT = 0; W.lastSeen = { x: m.x, z: m.z }; }
       else { W.seen = false; W.escT += dt * (g.hidden ? 2 : 1); if (W.escT > 7 + W.stars * 2.5) clearWanted('😎 You lost the police.'); }
       // busted: stopped (or on foot) right next to a chasing cop
-      const near = W.cops.some((c) => c.mode !== 'patrol' && c.mode !== 'leave' && Math.hypot(c.x - m.x, c.z - m.z) < 5.5);
+      const near = W.stars >= 2 && (W.cops.some((c) => c.mode === 'chase' && Math.hypot(c.x - m.x, c.z - m.z) < 5.5) || (LAW() && LAW().officerNear(m.x, m.z, 2.4)));
       const slow = !drive || Math.hypot(p.vx, p.vz) < 3.5;
       const bb = document.getElementById('gta-bust');
       if (near && slow && W.seen) { W.bustT += dt; bb.style.display = 'block'; bb.textContent = `🚔 Getting arrested… move! ${Math.max(0, 2.5 - W.bustT).toFixed(1)}`; if (W.bustT > 2.5) busted(); }
@@ -560,6 +563,7 @@
     sounds(nd, W.heli && !W.heli.leave ? Math.hypot(W.heli.x - m.x, W.heli.z - m.z) : 1e9);
   }
   function busted() {
+    if (LAW()) { const st = W.stars, ch = (W.charges || []).slice(); W.busted = true; LAW().arrest(st, ch); return; }
     W.busted = true; W.fine = Math.min(Math.max(0, Math.floor(((K && K.S && K.S.cash) || 0) / 2)), 150 * W.stars);
     if (window.LSPDrive && LSPDrive.fail) LSPDrive.fail('You were arrested by the LSP Police.');
   }
@@ -585,7 +589,10 @@
   });
 
   window.LSPDriveGTA = {
-    W, Radio, crime, clearWanted, dent: () => DENT,
+    W, Radio, crime, clearWanted, dent: () => DENT, spawnCop, removeCop, los, solid, me, bigText, clearBig, glowTex,
+    rawSfx: (n, o) => (rawSfx ? rawSfx(n, o) : L.sfx && L.sfx(n, o)),
+    reset() { W.stars = 0; W.seen = false; W.escT = 0; W.bustT = 0; W.charges = []; for (const c of W.cops.slice()) removeCop(c); if (W.heli) { C.scene.remove(W.heli.g); C.scene.remove(W.heli.cone); W.heli = null; } const bb = document.getElementById('gta-bust'); if (bb) bb.style.display = 'none'; },
+    targets: () => (LAW() ? LAW().targets() : []), blast: (x, z, d, r) => LAW() && LAW().blast(x, z, d, r),
     // minimap: police dots, the helicopter and the search area
     mini(g, dot, at, zoom) {
       if (W.stars && !W.seen && W.lastSeen) { const p = at(W.lastSeen.x, W.lastSeen.z, true); if (p) { g.fillStyle = 'rgba(80,140,255,.22)'; g.strokeStyle = 'rgba(80,140,255,.7)'; g.lineWidth = 2; g.beginPath(); g.arc(p[0], p[1], 55 * zoom, 0, 7); g.fill(); g.stroke(); } }
@@ -595,8 +602,9 @@
   };
 
   // gunshots that a cop can see or hear bring the police
+  let rawSfx = null;
   if (L.sfx) {
-    const base = L.sfx;
+    const base = L.sfx; rawSfx = base;
     L.sfx = function (name, o) {
       try {
         if (C && G().on && !G().paused && (name === 'rifle' || name === 'explode') && G().mode === 'foot' && !(window.LSPDriveRP && LSPDriveRP.inside && LSPDriveRP.inside()) && inCity(F().x, F().z)) {

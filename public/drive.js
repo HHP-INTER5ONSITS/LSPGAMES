@@ -64,7 +64,7 @@
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   const ord = (n) => n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
   // Brookhaven-style lots: three houses to claim and a supermarket (see drive-rp.js)
-  const RP_LOTS = { houses: [[1, 1, 1, 0], [1, 1, 1, 1], [1, 1, 0, 1]], market: [2, 1, 0, 1], biz: [2, 1, 1, 1], mafia: [3, 1, 1, 1], hospital: [3, 1, 0, 1], xhp: [3, 2, 0, 0], vipers: [[4, 2, 0, 0], [4, 2, 1, 1], [5, 2, 1, 0]] };
+  const RP_LOTS = { houses: [[1, 1, 1, 0], [1, 1, 1, 1], [1, 1, 0, 1]], market: [2, 1, 0, 1], biz: [2, 1, 1, 1], mafia: [3, 1, 1, 1], hospital: [3, 1, 0, 1], xhp: [3, 2, 0, 0], vipers: [[4, 2, 0, 0], [4, 2, 1, 1], [5, 2, 1, 0]], cityhall: [2, 2, 1, 1], prison: [[5, 4, 0, 0], [5, 4, 0, 1], [5, 4, 1, 0], [5, 4, 1, 1]] };
   const RPX = () => window.LSPDriveRP && window.LSPDriveRP.ready ? window.LSPDriveRP : null;
   const lotC = (bx, bz, lx, lz) => [RX(bx) + HALF + 14.5 + lx * 29, RX(bz) + HALF + 14.5 + lz * 29];
   const PARKS = ['3,0', '0,4'];
@@ -650,7 +650,7 @@
       (awnings[col] = awnings[col] || []).push(a1, a2);
     };
     const R = LSPG.rng(20260);
-    const special = new Set([...HIDEOUTS.map((h) => h.x + ',' + h.z), GARAGE.x + ',' + GARAGE.z, ...[...RP_LOTS.houses, RP_LOTS.market, RP_LOTS.biz, RP_LOTS.mafia, RP_LOTS.hospital, RP_LOTS.xhp, ...RP_LOTS.vipers].map((l) => lotC(...l).join(','))]);
+    const special = new Set([...HIDEOUTS.map((h) => h.x + ',' + h.z), GARAGE.x + ',' + GARAGE.z, ...[...RP_LOTS.houses, RP_LOTS.market, RP_LOTS.biz, RP_LOTS.mafia, RP_LOTS.hospital, RP_LOTS.xhp, ...RP_LOTS.vipers, RP_LOTS.cityhall, ...RP_LOTS.prison].map((l) => lotC(...l).join(','))]);
     for (let bx = 0; bx < NB; bx++) for (let bz = 0; bz < NB; bz++) {
       const x0 = RX(bx) + HALF, z0 = RX(bz) + HALF, S = CELL - ROAD, cx = x0 + S / 2, cz = z0 + S / 2;
       const sw = new T.BoxGeometry(S, 0.16, S); sw.translate(cx, 0.08, cz); walkGeos.push(sw);
@@ -1731,7 +1731,13 @@
     if (MP.mySay) { const me = G.mode === 'drive' ? P : F; if (now > MP.mySay.userData.until) { scene.remove(MP.mySay); MP.mySay = null; } else MP.mySay.position.set(me.x, me.y + 3.4, me.z); }
   }
 
-  window.LSPDrive = { setFx, FX, open: openLobby, _G: G, _P: () => P, fail: (why) => missionFailed(why), renderer: () => renderer, SPAWN,
+  // move the player somewhere on foot (and park their ride), used by the court and the prison
+  function placePlayer(x, z, h, cx, cz, ch) {
+    if (G.mode === 'drive') { G.mode = 'foot'; F.m.visible = true; P.m.driver.visible = false; stopEngine(); if (G.cam === 'seat') G.cam = 'chase'; }
+    F.x = x; F.z = z; F.h = h || 0; F.vx = F.vz = 0; F.tower = null; F.floor = 0; G.camH = F.h; camPos.init = false;
+    if (cx != null) { P.x = cx; P.z = cz; P.h = ch || 0; P.vx = P.vz = 0; P.vF = 0; P.y = 0; }
+  }
+  window.LSPDrive = { setFx, FX, open: openLobby, _G: G, _P: () => P, fail: (why) => missionFailed(why), renderer: () => renderer, SPAWN, place: placePlayer,
     _wreckRivals() { let n = 0; for (const r of G.rivals) if (!r.dead) { wreck(r); n++; } for (const b of G.bots) b.ai.topMul = 0.2; return n; },
     playWith(room) { load(); MP.want = room; if (G.on) { mpEnd(); mpBegin(); return; } startCity(); },
     // test hook: run the simulation without rendering. keys = {thr, steer, ...}

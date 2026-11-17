@@ -451,6 +451,7 @@
     E.wreckFx(x, z); L.sfx && L.sfx('explode'); E.G.shake = Math.max(E.G.shake || 0, 0.6);
     for (const e of IN.en) if (!e.dead) { const d = Math.hypot(e.x - x, e.z - z); if (d < r) { e.hp -= dmg * (1 - d / r * 0.6); e.alert = true; if (e.hp <= 0) kill(e); } }
     const F = E.getF(), d = Math.hypot(F.x - x, F.z - z); if (d < r * 0.7 && !fromPlayer) hurtMe(dmg * 0.3);
+    if (!IN.b && window.LSPDriveGTA && LSPDriveGTA.blast) LSPDriveGTA.blast(x, z, dmg, r);
     // missiles and bombs outside can hit a Red Vipers Tower
     if (!IN.b) for (const b of BLD) if (b.type === 'viper' && !destroyed(b.id) && VT[b.id].collapse == null && Math.abs(x - b.x) < b.w / 2 + 3 && Math.abs(z - b.z) < b.d / 2 + 3 && y < b.h) {
       const st = VT[b.id]; st.hp = (st.hp == null ? 12 : st.hp) - (dmg >= 300 ? 1 : 0.25);
@@ -466,6 +467,7 @@
       if (Math.random() < 0.7) E.puff(r.x, r.y, r.z, '#cfcfcf', 0.4, 0.6, 0, 0.5, 0, 1, 0.6);
       let hit = r.t > 2.2 || r.y < K.Y0;
       for (const e of IN.en) if (!e.dead && Math.hypot(e.x - r.x, e.z - r.z) < 1.2) hit = true;
+      if (!IN.b && window.LSPDriveGTA && LSPDriveGTA.targets) for (const o of LSPDriveGTA.targets()) if (Math.hypot(o.x - r.x, o.z - r.z) < (o.car ? 2.4 : 1.2) && r.y < 3) hit = true;
       if (IN.b) { const [u, v] = l2(r.x, r.z); if (Math.abs(u) > IN.hw || Math.abs(v) > IN.hd || IN.cols.some(([a, b2, c, d]) => u > a && u < c && v > b2 && v < d)) hit = true; }
       else for (const b of BLD) if (b.type === 'viper' && !destroyed(b.id) && Math.abs(r.x - b.x) < b.w / 2 && Math.abs(r.z - b.z) < b.d / 2 && r.y < b.h) hit = true;
       if (hit) { E.scene.remove(r.m); ROCKETS.splice(i, 1); explode(r.x, r.y, r.z, 300 * (1 + 0.25 * ((ARM().guns.rpg || 1) - 1)), 5, true); }
@@ -677,11 +679,16 @@
       let best = null;
       for (const e of IN.en) { if (e.dead) continue; const dx = e.x - F.x, dz = e.z - F.z, d = Math.hypot(dx, dz), a = Math.abs(K.wrapA(Math.atan2(dx, dz) - F.h - jit)); if (d < g.range && a < cone(d) && (!best || a < best.a) && clear(F.x, F.z, e.x, e.z)) best = { e, a, d }; }
       for (const t of IN.targets) { const dx = t.x - F.x, dz = t.z - F.z, d = Math.hypot(dx, dz), a = Math.abs(K.wrapA(Math.atan2(dx, dz) - F.h - jit)); if (d < g.range && a < cone(d) && (!best || a < best.a)) best = { t, a, d }; }
+      // the LSP Police (and their cars) out in the streets
+      if (!IN.b && window.LSPDriveGTA && LSPDriveGTA.targets) for (const o of LSPDriveGTA.targets()) { const dx = o.x - F.x, dz = o.z - F.z, d = Math.hypot(dx, dz), a = Math.abs(K.wrapA(Math.atan2(dx, dz) - F.h - jit)); if (d < g.range && a < cone(d) * (o.car ? 1.6 : 1) && (!best || a < best.a) && clear(F.x, F.z, o.x, o.z)) best = { o, a, d }; }
       if (best && best.e) {
         const e = best.e; tracer(F.x + fx * 0.6, y, F.z + fz * 0.6, e.x, K.Y0 + 1.3 * (e.boss ? 1.3 : 1), e.z, '#ffd56b');
         const falloff = g.pellets > 1 ? Math.max(0.3, 1 - best.d / g.range) : 1;
         e.hp -= gunDmg(g) * falloff; e.alert = true; if (p === 0) L.sfx && L.sfx('hit', { volume: 0.4 }); E.puff(e.x, K.Y0 + 1.3, e.z, '#b3162a', 0.3, 0.4, 0, 1, 0, 1.5, 0.8);
         if (e.hp <= 0) kill(e);
+      } else if (best && best.o) {
+        const o = best.o; tracer(F.x + fx * 0.6, y, F.z + fz * 0.6, o.x, K.Y0 + (o.car ? 0.9 : 1.3), o.z, '#ffd56b');
+        o.hit(gunDmg(g) * (g.pellets > 1 ? Math.max(0.3, 1 - best.d / g.range) : 1)); if (p === 0) L.sfx && L.sfx('hit', { volume: 0.4 });
       } else if (best && best.t) {
         const t = best.t; tracer(F.x + fx * 0.6, y, F.z + fz * 0.6, t.x, K.Y0 + 1.3, t.z, '#ffd56b'); t.t = 0.4; if (p === 0) L.sfx && L.sfx('ding', { volume: 0.4 });
         const m = M(); if ((m.rangeDay || 0) !== K.S.day) { m.rangeDay = K.S.day; m.rangeXp = 0; } if (m.rangeXp < 60 && p === 0) { m.rangeXp++; gainXp(1); }
@@ -815,6 +822,6 @@
       for (const b of BLD) if (b.type === 'viper') { g.fillStyle = destroyed(b.id) ? '#555' : '#d61f30'; R(b.x - 12, b.z - 12, b.x + 12, b.z + 12); }
     },
   };
-  window.LSPDriveCity = { _leave: () => leaveRoom(), _sel: (id) => { CB.armed = true; selectGun(id); }, join: (admin) => (K ? join(admin) : false), killAll() { let n = 0; for (const e of IN.en) if (!e.dead) { kill(e); n++; } return n; }, _IN: IN, _enter: (id, f) => enter(BLD.find((b) => b.id === id), f || 0), _BLD: BLD, _VT: VT };
+  window.LSPDriveCity = { _leave: () => leaveRoom(), holster: () => { if (CB.armed) toggleGun(false); }, _sel: (id) => { CB.armed = true; selectGun(id); }, join: (admin) => (K ? join(admin) : false), killAll() { let n = 0; for (const e of IN.en) if (!e.dead) { kill(e); n++; } return n; }, _IN: IN, _enter: (id, f) => enter(BLD.find((b) => b.id === id), f || 0), _BLD: BLD, _VT: VT };
   const hook = () => (window.LSPDriveRP ? window.LSPDriveRP.ext(CITY) : setTimeout(hook, 50)); hook();
 })();
